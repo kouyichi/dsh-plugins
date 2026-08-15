@@ -1,0 +1,109 @@
+#!/usr/bin/env node
+/**
+ * dsh-profile — standalone profile manager CLI for DeepSeek Harness.
+ *
+ * Usage:
+ *   dsh-profile list
+ *   dsh-profile create <name> [--base-only] [--bundles a,b] [--description "..."]
+ *   dsh-profile delete <name> --confirm
+ *   dsh-profile rename <name> <new-name>
+ *   dsh-profile describe <name> [description]
+ *   dsh-profile use <name>       (empty string clears the default)
+ *   dsh-profile export <name> [path]
+ *   dsh-profile import <archive> [name]
+ *   dsh-profile info <name>
+ *   dsh-profile current
+ */
+
+import { opList, opCreate, opDelete, opRename, opDescribe, opUse, opExport, opImport, opInfo, getCurrent } from "../core.js";
+
+const argv = process.argv.slice(2);
+const cmd = argv[0];
+
+function fail(msg) {
+  process.stderr.write("dsh-profile: " + msg + "\n");
+  process.exit(1);
+}
+
+function run() {
+  switch (cmd) {
+    case "list": case "ls": {
+      console.log(opList());
+      break;
+    }
+    case "current": {
+      console.log(getCurrent() || "(未设置默认 profile)");
+      break;
+    }
+    case "create": {
+      const name = argv[1];
+      if (!name) fail("usage: dsh-profile create <name> [--base-only] [--bundles a,b] [--description ...]");
+      const baseOnly = argv.includes("--base-only");
+      let bundles = null;
+      const bi = argv.indexOf("--bundles");
+      if (bi >= 0 && argv[bi + 1]) bundles = argv[bi + 1].split(",").map((s) => s.trim()).filter(Boolean);
+      let description = null;
+      const di = argv.indexOf("--description");
+      if (di >= 0 && argv[di + 1]) description = argv.slice(di + 1).join(" ").replace(/^["']|["']$/g, "");
+      console.log(opCreate(name, { bundles, baseOnly, description }));
+      break;
+    }
+    case "delete": case "rm": {
+      const name = argv[1];
+      if (!name) fail("usage: dsh-profile delete <name> --confirm");
+      console.log(opDelete(name, argv.includes("--confirm") || argv.includes("-f")));
+      break;
+    }
+    case "rename": case "mv": {
+      if (!argv[1] || !argv[2]) fail("usage: dsh-profile rename <name> <new-name>");
+      console.log(opRename(argv[1], argv[2]));
+      break;
+    }
+    case "describe": {
+      if (!argv[1]) fail("usage: dsh-profile describe <name> [description]");
+      console.log(opDescribe(argv[1], argv[2] ?? undefined));
+      break;
+    }
+    case "use": {
+      if (argv[1] === undefined) fail("usage: dsh-profile use <name>（空字符串清除默认）");
+      console.log(opUse(argv[1]));
+      break;
+    }
+    case "export": {
+      if (!argv[1]) fail("usage: dsh-profile export <name> [path]");
+      console.log(opExport(argv[1], argv[2]));
+      break;
+    }
+    case "import": {
+      if (!argv[1]) fail("usage: dsh-profile import <archive.tar.gz> [name]");
+      console.log(opImport(argv[1], argv[2]));
+      break;
+    }
+    case "info": case "show": {
+      if (!argv[1]) fail("usage: dsh-profile info <name>");
+      console.log(opInfo(argv[1]));
+      break;
+    }
+    case "help": case "-h": case "--help": {
+      console.log(`dsh-profile — DeepSeek Harness profile manager
+
+用法:
+  dsh-profile list                   列出所有 profile
+  dsh-profile current                显示当前默认 profile
+  dsh-profile create <name> [--base-only] [--bundles a,b] [--description "…"]
+  dsh-profile delete <name> --confirm
+  dsh-profile rename <name> <new>
+  dsh-profile describe <name> [desc]
+  dsh-profile use <name>             设默认（"" 清除）
+  dsh-profile export <name> [path]
+  dsh-profile import <archive> [name]
+  dsh-profile info <name>`);
+      break;
+    }
+    default: {
+      fail(`未知命令: ${cmd || "（空）"}。用 dsh-profile help 查看用法。`);
+    }
+  }
+}
+
+run();

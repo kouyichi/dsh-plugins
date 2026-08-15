@@ -1,0 +1,8 @@
+{
+  "name": "dsh-tower",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "Tower — tiered multi-agent orchestration for dsh: stack subagent runs into layered towers with status tracking, context flow (ascend), follow-ups, and pruning."
+}

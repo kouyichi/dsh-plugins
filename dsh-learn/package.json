@@ -1,0 +1,8 @@
+{
+  "name": "dsh-learn",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "Self-learning + skill curator for dsh: record lessons, draft/promote skills, periodic review that corrects/consolidates/retires skills (Hermes curator pattern)."
+}

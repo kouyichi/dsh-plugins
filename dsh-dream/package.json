@@ -1,0 +1,8 @@
+{
+  "name": "dsh-dream",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "Dream — 4-phase memory consolidation for dsh (port of Claude Code's auto-dream skill): Orient → Gather → Consolidate → Prune&Index over session logs, auto-triggered every 24h."
+}

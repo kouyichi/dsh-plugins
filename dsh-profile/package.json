@@ -1,0 +1,8 @@
+{
+  "name": "dsh-profile",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "Profile manager for dsh: list/create/delete/rename/describe/use/export/import profiles (Hermes `hermes profile` port)."
+}
