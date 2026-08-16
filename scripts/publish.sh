@@ -25,6 +25,19 @@ echo "== [1/5] 本地仓库检查 =="
 cd "$REPO"
 git status --porcelain | grep -q . && { echo "  ⚠️ 工作区有未提交改动："; git status --short; echo "  请先提交"; exit 1; }
 echo "  ✓ 工作区干净"
+
+echo "== [1b/5] awesome-dsh-plugin 收录状态检查（dsh.bundle + cordis.patch.yml）=="
+MISSING=0
+for p in dsh-learn dsh-profile dsh-dream dsh-tower dsh-kanban dsh-scaffold dsh-guard dsh-xray dsh-cron dsh-bench dsh-pack dsh-a2a dsh-meter; do
+  BUNDLE=$(node -e "const p=require('./$p/package.json'); console.log(p.dsh?.bundle?.patch ? 'ok' : 'MISSING')" 2>/dev/null)
+  PATCH=$([ -f "$p/cordis.patch.yml" ] && echo ok || echo MISSING)
+  if [ "$BUNDLE" = "MISSING" ] || [ "$PATCH" = "MISSING" ]; then
+    echo "  ⚠️ $p: dsh.bundle=$BUNDLE cordis.patch.yml=$PATCH"
+    MISSING=1
+  fi
+done
+if [ $MISSING -eq 1 ]; then echo "  请先补齐 dsh.bundle manifest 与 cordis.patch.yml（awesome-dsh-plugin 硬性要求）"; exit 1; fi
+echo "  ✓ 13 插件全部声明 dsh.bundle + cordis.patch.yml"
 BRANCH=$(git branch --show-current)
 echo "  ✓ 当前分支: $BRANCH"
 
@@ -65,6 +78,11 @@ if [ -z "$EXISTING" ]; then
     -f description="dsh (DeepSeek Harness) 插件全家桶：learn/profile/dream/tower/kanban + scaffold/guard/xray/cron/bench/pack/a2a/meter — 13 plugins, 76 tools" \
     -F private=false >/dev/null && echo "  ✓ 已创建 github.com/$GH_USER/$REPO_NAME"
 fi
+# 打 dsh-plugin topic（awesome-dsh-plugin 收录硬性要求；重跑幂等）
+echo "  打 topic: dsh-plugin, deepseek-harness, dsh..."
+gh api --method PUT "/repos/$GH_USER/$REPO_NAME/topics" \
+  --input <(echo '{"names":["dsh-plugin","deepseek-harness","dsh","awesome-list","agent-plugins"]}') \
+  --jq '.names | join(", ")' | sed 's/^/  ✓ topics: /' || echo "  ⚠️ topic 设置失败（可稍后手动: gh api --method PUT .../topics）"
 # repo 级 credential helper（全局 gh helper 会抢先返回 403，见 dsh-harness-development skill）
 git config credential.helper "" >/dev/null 2>&1
 if [ -f ~/.config/gh/hosts.yml ]; then

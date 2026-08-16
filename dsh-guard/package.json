@@ -1,8 +1,12 @@
 {
   "name": "dsh-guard",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "./index.js",
-  "description": "Security/approval/governance for dsh: rule-based tool denial via tools.guard(), full tool-call audit trail, and governance reports (Codex sandbox-x-approval + Claude PreToolUse hook pattern)."
+  "description": "Security/approval/governance for dsh: rule-based tool denial via tools.guard(), full tool-call audit trail, and governance reports (Codex sandbox-x-approval + Claude PreToolUse hook pattern).",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }

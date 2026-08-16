@@ -1,8 +1,12 @@
 {
   "name": "dsh-bench",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "./index.js",
-  "description": "Agent benchmark runner for dsh: run a task set through fresh agents, score pass/fail by expectation keywords, measure duration, and produce comparison reports (evaluation gap in the ecosystem)."
+  "description": "Agent benchmark runner for dsh: run a task set through fresh agents, score pass/fail by expectation keywords, measure duration, and produce comparison reports (evaluation gap in the ecosystem).",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }

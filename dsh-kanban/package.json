@@ -1,8 +1,12 @@
 {
   "name": "dsh-kanban",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "./index.js",
-  "description": "Hermes-style kanban for dsh: SQLite-backed durable task board with columns, dependencies, assignees, a background dispatcher (reclaim/promote/spawn), heartbeats, and subagent execution."
+  "description": "Hermes-style kanban for dsh: SQLite-backed durable task board with columns, dependencies, assignees, a background dispatcher (reclaim/promote/spawn), heartbeats, and subagent execution.",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }

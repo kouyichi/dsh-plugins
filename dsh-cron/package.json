@@ -1,8 +1,12 @@
 {
   "name": "dsh-cron",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "./index.js",
-  "description": "Persistent background scheduled agent jobs for dsh: cron_add/list/remove/run/logs with durable storage, agent-per-run execution, and a 30s dispatcher tick (Hermes cron + Kimi built-in cron pattern)."
+  "description": "Persistent background scheduled agent jobs for dsh: cron_add/list/remove/run/logs with durable storage, agent-per-run execution, and a 30s dispatcher tick (Hermes cron + Kimi built-in cron pattern).",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }

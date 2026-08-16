@@ -1,8 +1,12 @@
 {
   "name": "dsh-pack",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "./index.js",
-  "description": "Context packing for dsh: compile files + skills + memory + recent session highlights into a bounded-context pack file, and estimate the skills-catalog context budget (Codex 2% progressive-disclosure rule)."
+  "description": "Context packing for dsh: compile files + skills + memory + recent session highlights into a bounded-context pack file, and estimate the skills-catalog context budget (Codex 2% progressive-disclosure rule).",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }

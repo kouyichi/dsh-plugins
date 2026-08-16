@@ -1,8 +1,12 @@
 {
   "name": "dsh-xray",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "./index.js",
-  "description": "Session data deep analysis & export for dsh: decode zstd session logs into structured analytics (turns/steps/tools/errors/tokens), full-text search, and markdown/JSON export."
+  "description": "Session data deep analysis & export for dsh: decode zstd session logs into structured analytics (turns/steps/tools/errors/tokens), full-text search, and markdown/JSON export.",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }
