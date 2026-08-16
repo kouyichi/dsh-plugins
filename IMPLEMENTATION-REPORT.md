@@ -62,10 +62,11 @@ GitHub 检索到多个精选列表（**存在，且很活跃**）：
   - Auto-trigger：Stop hook 检查 24h 间隔，到期下次会话自动跑 `/dream`
   - 记忆系统自动检测（native/OpenClaw/project-root）
 
-**④ Kimi /tower（重点结论）**
-- 证据链：kimi-cli（★11k）与 kimi-code 的 README、slash-commands.md、CHANGELOG、源码树（`src/kimi_cli/ui/shell/slash.py`、`apps/kimi-code/src/tui/commands/`）、GitHub 全站代码/仓库搜索 → **官方与社区均无 /tower 命令**
-- 推断语义：tower（塔）= 多 Agent 分层编排——工作按层堆叠、结果逐级上交、全结构可观测（与其余 4 个"记忆/管理"类功能互补）
-- **决策：按此语义实现，报告说明，等用户回来确认**
+**④ Kimi /tower（调研结论：官方已于 2026-08-16 新增，按真实语义重写）**
+- 初次调研（08-16 凌晨）：kimi-cli 与 kimi-code 均无 /tower——**当时确实不存在**
+- 用户提示后复查：**kimi-code 于 2026-08-16T07:13Z 合并 `feat(agent-core): add tower command to orchestrate multi-agents`（#2633）**，含完整实现（packages/agent-core-v2/src/features/tower/：protocol/tools/skill/workerProfile/towerService + 12 个测试文件 + changeset）
+- **真实语义**：control tower 模型——主 agent 是唯一指挥塔（绝不写产品代码），worker agents 在各自 **git worktree** 并行执行 missions，reviewer 审查分支；协议由**工具强制**（.tower/ 下 state.json/MISSIONS.md/comms 全部由 Tower 工具写入，禁止手改）；硬门禁：build scope 两两不相交（stem 前缀法）、review 按分支 tip 打戳（clean/p1-N/p2-N + merge 建议）、merge gate 四条件（clean review + tip 未移 + deps 已合并 + 改动全在 scope 内）、survey 零 diff 关闭；工作流 init→plan(2-4 missions)→spawn(背靠背并行)→supervise(inbox 驱动)→merge(依赖序)→teardown(comms 保留审计)
+- **实现**：dsh-tower **v2 完全重写**为忠实移植（工具名 dsh 风格 tower_*，11 个：init/plan/spawn/status/send/inbox/mission/finding/review/merge/teardown；.tower/ 协议同构；glob 匹配 + stem 重叠检查 + 四条件 merge gate；worker/reviewer briefing 含协议覆盖层）
 
 **⑤ Hermes kanban**
 - `hermes kanban` 30+ 子命令；SQLite schema（tasks/task_links/task_comments/task_events/task_runs/attachments）
@@ -114,10 +115,10 @@ GitHub 检索到多个精选列表（**存在，且很活跃**）：
 | **dsh-learn** | 收件箱→草案→发布→审查（生命周期过渡 30/90 天 + 子代理伞形合并，dry-run 默认，归档可恢复）；后台每 6h 自动过渡 | learn_record / draft / promote / list / review / retire / restore / pin / summarize（9） | ~/.dsh/learn/ + ~/.dsh/skills/ |
 | **dsh-profile** | 9 工具 + 独立 CLI `dsh-profile`（已链 /usr/local/bin）；use=写 default-profile + 生成 ~/.dsh/bin/dsh wrapper（DSH_PROFILE 覆盖） | profile_list / create / delete / rename / describe / use / export / import / info（9） | ~/.dsh/profiles/ |
 | **dsh-dream** | 4-phase（Orient→Gather 扫 20 会话 zstd 解码→Consolidate 子代理合并→Prune&Index ≤200 行）；后台每小时检查、24h 自动整合 | dream_run / status / now（3） | ~/.dsh/dreams/ |
-| **dsh-tower** | 塔=分层子代理编排：dispatch 堆层（parent_floor 自动继承下层已上交摘要）、ascend 逐级上交、followup 续聊带全上下文、全塔可观测 | tower_create / dispatch / status / peek / ascend / followup / stop / prune / list（9） | ~/.dsh/tower/ |
+| **dsh-tower** | control tower 多代理并行编排（Kimi /tower 移植）：missions + git worktree 隔离 + review/merge 硬门禁 | tower_init / plan / spawn / status / send / inbox / mission / finding / review / merge / teardown（11） | 仓库内 .tower/（协议状态） |
 | **dsh-kanban** | SQLite（WAL）持久板；dispatcher 每 60s：回收心跳超时(30min)→晋升 todo 父全 done→ready→自动派发子代理；完成→done+摘要回写、失败→blocked+错误；依赖图/评论/事件/运行记录 | kanban_create_board / list_boards / create_task / list_tasks / get_task / update_task / add_comment / link / dispatch_task / stop_task / delete_task / status（12） | ~/.dsh/kanban/kanban.db |
 
-合计 **42 个工具 + 5 个运行时 skill**。
+合计 **44 个工具 + 5 个运行时 skill**。
 
 ---
 
@@ -134,7 +135,9 @@ GitHub 检索到多个精选列表（**存在，且很活跃**）：
 | 综合冒烟：6 步（建看板/建任务/learn_record/profile_list/dream_status/tower_create） | ✅ 全通过，真实落盘 |
 | kanban 派发链路：create(ready)→dispatch→子代理执行→completed 结算 | ✅ outcome=completed、summary 回写、事件时间线正确 |
 | learn 全流程：record→draft→promote（~/.dsh/skills 落盘）→list→retire（可恢复） | ✅ SKILL.md 真实发布/归档 |
-| tower 两层编排：L1→L2 派发、继承上下文字段挂接、结果摘要回写 | ✅ |
+| tower 两层编排：L1→L2 派发、继承上下文字段挂接、结果摘要回写 | ✅（v1 分层版，已被 v2 取代） |
+| tower v2 协议层：init/plan（重叠/坏依赖/全仓 scope 拒绝）/mission/send/inbox/finding/review/merge 门禁四条件/survey 零 diff/teardown | ✅ 协议测试 PROTOCOL_OK |
+| tower v2 真实 E2E：init→plan→spawn worker（真实 worktree 提交 hello.txt）→reviewer r1 p2 被门禁拒→修复→r2 clean→merge→teardown | ✅ 全链路通过，master 含 merge commit，审计保留 |
 | dream 4-phase：从零建立 MEMORY.md（结构化索引、噪声会话标记、绝对日期） | ✅ 质量高 |
 | 最终回归：5 插件 5 工具真实调用 | ✅ |
 
@@ -171,7 +174,7 @@ GitHub 检索到多个精选列表（**存在，且很活跃**）：
 | 新建/切换 profile | "创建一个 profile 叫 xxx" / "把 tui 设为默认 profile" |
 | 导出/导入 profile | "把 web profile 导出"（备份迁移） |
 | 记忆整合 | "跑一次 dream" / "看 dream 状态"（24h 自动跑） |
-| 分层派活 | "建塔：先调研 X，再基于结果实施 Y"（tower_create + ascend） |
+| 分层派活 | "用 tower：先调研 X，再基于结果实施 Y"（tower_init → tower_plan → tower_spawn，并行 workers + review/merge 门禁） |
 | 任务跟踪 | "把这几件事放看板"（kanban_create_task）/"派发这个任务"（kanban_dispatch_task） |
 
 ### 5.3 shell 直接可用
@@ -182,8 +185,7 @@ dsh-profile list | create <名> | use <名> | export <名> | import <包> ...   
 ---
 
 ## 6. 遗留事项
-1. **Kimi /tower 语义为推断实现**（调研确认官方不存在），等用户确认是否需要调整方向
-2. 插件代码未推 GitHub（需要可按 dsh-tui-app 先例发布 kouyichi/dsh-plugins）
-3. dsh-tui-app 仓库有并发会话正在开发（新版 /plugins 面板），其未提交修改保留在工作区，未触碰
-4. 测试数据已清理（冒烟看板/技能退役；MEMORY.md 保留为 dream 真实产物）
-5. 验证脚本留在 /tmp（删除被终端批准机制拦截，幂等可重跑）
+1. 插件代码未推 GitHub（需要可按 dsh-tui-app 先例发布 kouyichi/dsh-plugins）
+2. dsh-tui-app 仓库有并发会话正在开发（新版 /plugins 面板），其未提交修改保留在工作区，未触碰
+3. 测试数据已清理（冒烟看板/技能退役；MEMORY.md 保留为 dream 真实产物；tower E2E 仓库在 /tmp/tower-e2e-repo 可复查）
+4. 验证脚本留在 /tmp（删除被终端批准机制拦截，幂等可重跑：hermes-verify-dsh-plugins.sh / hermes-verify-tower-v2.sh / hermes-verify-dsh-tui-panel.sh）
