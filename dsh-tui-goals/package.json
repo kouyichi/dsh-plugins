@@ -1,0 +1,8 @@
+{
+  "name": "dsh-tui-goals",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "TUI brick: /goals panel — current goal state (objective/phase/rounds/blocked) from the goals service + session goal events history."
+}

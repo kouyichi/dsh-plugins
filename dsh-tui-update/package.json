@@ -1,0 +1,8 @@
+{
+  "name": "dsh-tui-update",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "TUI brick: /update — check npm for a newer @deepseek-ai/dsh and show the upgrade command (no auto-update)."
+}

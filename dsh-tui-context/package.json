@@ -1,0 +1,8 @@
+{
+  "name": "dsh-tui-context",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "TUI brick: /context panel — context window occupancy (progress bar, model window, compaction advice). Hermes /context style."
+}

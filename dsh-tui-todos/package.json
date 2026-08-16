@@ -1,0 +1,8 @@
+{
+  "name": "dsh-tui-todos",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "TUI brick: /todos panel — live todo list from todo/write session events (the base todo tool's whole-list snapshot), with status glyphs and counts."
+}

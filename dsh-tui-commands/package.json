@@ -1,0 +1,8 @@
+{
+  "name": "dsh-tui-commands",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "TUI brick: custom slash commands as Markdown files (~/.dsh/tui-commands/*.md, frontmatter description + prompt body, $ARGUMENTS substitution) + /init (AGENTS.md). Claude/OpenCode style."
+}

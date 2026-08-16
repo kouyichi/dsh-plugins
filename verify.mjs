@@ -29,8 +29,26 @@ let failures = 0;
 function makeMockCtx() {
   const registrations = [];
   const skills = [];
+  const extRegs = { commands: [], panels: [], statusFields: [], themes: [], hooks: 0, provides: [] };
   const ctx = {
+    provide(name, value) {
+      extRegs.provides.push(name);
+      if (name === "tuiExtensions") {
+        // record the seam instead of the real object so brick registrations
+        // land in extRegs and get contract-checked below
+        ctx._ext = {
+          commands: new Map(), panels: new Map(), statusFields: new Map(), themes: new Map(),
+          inputHooks: { onLeader: new Map(), onDoubleEsc: [], onAltEnter: [], onAltUp: [] },
+          registerCommand: (d) => { extRegs.commands.push(d); return () => {}; },
+          registerPanel: (d) => { extRegs.panels.push(d); return () => {}; },
+          registerStatusField: (d) => { extRegs.statusFields.push(d); return () => {}; },
+          registerTheme: (d) => { extRegs.themes.push(d); return () => {}; },
+          addInputHook: (h) => { extRegs.hooks++; return () => {}; },
+        };
+      }
+    },
     get(service) {
+      if (service === "tuiExtensions") return ctx._ext ?? null;
       if (service === "tools") {
         return { register: (d) => { registrations.push(d); return () => {}; }, guard: () => () => {} };
       }
@@ -42,16 +60,21 @@ function makeMockCtx() {
     on() { return () => {}; },
     logger: { info() {}, warn() {}, error() {} },
   };
-  return { ctx, registrations, skills };
+  return { ctx, registrations, skills, extRegs };
 }
 
 for (const p of plugins) {
   const problems = [];
-  const { ctx, registrations, skills } = makeMockCtx();
+  const { ctx, registrations, skills, extRegs } = makeMockCtx();
   try {
     const mod = await import(pathToFileURL(join(ROOT, p, "index.js")).href);
     if (typeof mod.name !== "string" || !mod.name) problems.push("missing name export");
-    if (!Array.isArray(mod.inject) || !mod.inject.includes("tools")) problems.push("inject must include 'tools'");
+    if (!Array.isArray(mod.inject)) problems.push("inject must be an array");
+    // bricks may inject only tuiExtensions; classic plugins must include tools;
+    // a pure provider (dsh-tui-bridge) may inject nothing at all
+    else if (mod.inject.length > 0 && !mod.inject.includes("tuiExtensions") && !mod.inject.includes("tools")) {
+      problems.push("inject must include 'tools' (classic), 'tuiExtensions' (TUI brick), or be empty (pure provider)");
+    }
     if (typeof mod.apply !== "function") problems.push("missing apply export");
     if (problems.length === 0) {
       try { mod.apply(ctx); } catch (err) { problems.push(`apply threw: ${err.message}`); }
@@ -62,6 +85,19 @@ for (const p of plugins) {
       if (typeof t.output?.render !== "function") problems.push(`tool ${t.name}: output.render must be a function`);
       if (typeof t.execute !== "function") problems.push(`tool ${t.name}: missing execute`);
       if (t.presentCall !== undefined && typeof t.presentCall !== "function") problems.push(`tool ${t.name}: presentCall must be a function`);
+    }
+    // brick contract: command/panel/statusField/theme registrations must satisfy the seam
+    for (const c of extRegs.commands) {
+      if (!c.name || typeof c.handler !== "function") problems.push(`brick command: name+handler required (${c.name ?? "?"})`);
+    }
+    for (const pn of extRegs.panels) {
+      if (!pn.id || typeof pn.load !== "function") problems.push(`brick panel ${pn.id ?? "?"}: id+load required`);
+    }
+    for (const f of extRegs.statusFields) {
+      if (!f.id || typeof f.render !== "function") problems.push(`brick statusField ${f.id ?? "?"}: id+render required`);
+    }
+    for (const t of extRegs.themes) {
+      if (!t.name || typeof t.codes !== "object") problems.push(`brick theme ${t.name ?? "?"}: name+codes required`);
     }
   } catch (err) {
     problems.push(`import failed: ${err.message}`);

@@ -1,0 +1,8 @@
+{
+  "name": "dsh-tui-usage",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "TUI brick: /usage panel — current-session tokens/cache/cost + global session overview (scan of session logs, dsh-meter style pricing)."
+}

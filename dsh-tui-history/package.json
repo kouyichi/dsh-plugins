@@ -1,0 +1,8 @@
+{
+  "name": "dsh-tui-history",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "TUI brick: /undo [N] + double-Esc history picker — keep the last user messages, re-send or pick from a timeline panel (rewind-lite, Codex double-Esc pattern)."
+}

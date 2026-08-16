@@ -1,0 +1,8 @@
+{
+  "name": "dsh-tui-theme",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "TUI brick: /theme — theme picker (core deep/light + brick-registered themes), hot-switch with persistence. Also ships two extra themes (ocean, mono)."
+}

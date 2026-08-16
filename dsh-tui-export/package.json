@@ -1,0 +1,8 @@
+{
+  "name": "dsh-tui-export",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "TUI brick: /export — export the current session to markdown (~/.dsh/exports/), with a plain-text transcript (user/assistant/tool summary)."
+}
