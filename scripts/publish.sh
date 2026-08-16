@@ -58,6 +58,25 @@ else
 fi
 
 echo "== [3/5] GitHub repo 检查（REST，GraphQL 曾被拒）=="
+# ⚠️ hosts.yml 顶层 oauth_token 可能是 fine-grained PAT（github_pat_*）——
+# fine-grained token 不能创建仓库（403 "Resource not accessible"）。
+# 优先用 users.<user>.oauth_token（gho_* classic OAuth token，有 repo scope）。
+CLS_TOKEN=""
+if [ -f ~/.config/gh/hosts.yml ]; then
+  CLS_TOKEN=$(python3 -c "
+import yaml,sys
+try:
+    d = yaml.safe_load(open('/root/.config/gh/hosts.yml'))
+    g = d['github.com']
+    u = g.get('users', {}).get('kouyichi', {})
+    print(u.get('oauth_token', ''))
+except Exception: print('')
+" 2>/dev/null)
+fi
+if [ -n "$CLS_TOKEN" ]; then
+  export GH_TOKEN="$CLS_TOKEN"
+  echo "  使用 classic OAuth token（可创建仓库）"
+fi
 EXISTING=$(gh api "repos/$GH_USER/$REPO_NAME" --jq '.full_name' 2>/dev/null || echo "")
 if [ -n "$EXISTING" ]; then
   echo "  ✓ repo 已存在: $EXISTING"
@@ -86,7 +105,10 @@ gh api --method PUT "/repos/$GH_USER/$REPO_NAME/topics" \
   --jq '.names | join(", ")' | sed 's/^/  ✓ topics: /' || echo "  ⚠️ topic 设置失败（可稍后手动: gh api --method PUT .../topics）"
 # repo 级 credential helper（全局 gh helper 会抢先返回 403，见 dsh-harness-development skill）
 git config credential.helper "" >/dev/null 2>&1
-if [ -f ~/.config/gh/hosts.yml ]; then
+if [ -n "$CLS_TOKEN" ]; then
+  git config credential.helper "!f() { echo username=x-access-token; echo password=$CLS_TOKEN; }; f"
+  echo "  ✓ repo 级 credential helper 已配置（classic token）"
+elif [ -f ~/.config/gh/hosts.yml ]; then
   TOKEN=$(python3 -c "import yaml,sys; d=yaml.safe_load(open('/root/.config/gh/hosts.yml')); print(d['github.com'][0]['oauth_token'])" 2>/dev/null || gh auth token)
   git config credential.helper "!f() { echo username=x-access-token; echo password=$TOKEN; }; f"
   echo "  ✓ repo 级 credential helper 已配置"
