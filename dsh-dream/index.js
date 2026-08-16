@@ -444,7 +444,8 @@ export function apply(ctx) {
     const state = loadState();
     const last = state.last_dream_at;
     if (last && Date.now() - last < DREAM_INTERVAL_MS) return;
-    if (last === null && existsSync(MEMORY_FILE)) return; // never dream with no baseline? no: first dream is fine
+    // 无 last_dream_at（从未整合或 state.json 丢失）→ 应执行首次/重建整合；
+    // 手动 dream_run/dream_now 总会写入 last_dream_at，因此不会误伤刚手动整合的场景。
     running = true;
     try {
       const r = await runDream({ ctx, subagents, agents, auto: true });
