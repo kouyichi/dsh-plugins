@@ -1,5 +1,9 @@
 # dsh 插件全家桶 — 交付报告
 
+> ⚠️ **本文档为 v1（2026-08-16 凌晨，5 插件）报告，已被后续工作取代，仅作历史存档。**
+> 当前权威报告：`REPORT-2026-08-16.md`（二期：生态调研 × 6 agent 能力矩阵 × 8 新插件 × 全家桶深度 review，13 插件）
+> 并行工作流报告：`IMPLEMENTATION-REPORT.md`（tower v2 忠实移植 Kimi /tower，kimi-code #2633）
+
 **日期**：2026-08-16 ｜ **位置**：`/workspace/algorithm/dsh-plugins/`（git 已初始化）
 **挂载**：家级 `~/.dsh/cordis.patch.yml`（5 个插件对 headless/tui/web 全部 profile 生效）
 **安装**：`bash /workspace/algorithm/dsh-plugins/install.sh`（幂等，已执行）
