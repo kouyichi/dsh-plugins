@@ -1,0 +1,8 @@
+{
+  "name": "dsh-a2a",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "Native A2A (Agent-to-Agent, v1.0 JSON-RPC) server for dsh: expose this dsh as a callable agent over HTTP with tasks/send|get|cancel|list, bearer-token auth, and agent-per-task execution."
+}

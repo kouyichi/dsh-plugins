@@ -6,7 +6,7 @@ set -euo pipefail
 export PATH=/root/.nvm/versions/node/v22.22.2/bin:$PATH
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
 PLUGINS_DIR="$DSH_HOME/plugins"
-PLUGINS="dsh-learn dsh-profile dsh-dream dsh-tower dsh-kanban"
+PLUGINS="dsh-learn dsh-profile dsh-dream dsh-tower dsh-kanban dsh-scaffold dsh-guard dsh-xray dsh-cron dsh-bench dsh-pack dsh-a2a dsh-meter"
 
 echo "==> 1. 确认插件目录存在"
 for p in $PLUGINS; do
@@ -86,7 +86,22 @@ for prof in headless web tui; do
   done
 done
 
-echo "==> 6. 验证 dump-config"
+echo "==> 6. 生成/更新家级 patch 层（~/.dsh/cordis.patch.yml）"
+home_patch="$DSH_HOME/cordis.patch.yml"
+{
+  echo "# 家级 patch 层：本机所有 dsh profile 生效"
+  echo "# 由 dsh-plugins 安装脚本生成 — 插件全家桶挂载"
+  echo ""
+  echo "# 插件行（按加载顺序；每个都是 cordis 插件，tools/skills 服务可用即自动注册工具与技能）"
+  echo "- insert:"
+  for p in $PLUGINS; do
+    echo "    - id: $p"
+    echo "      name: $p"
+  done
+} > "$home_patch"
+echo "  已更新 $home_patch（$(echo $PLUGINS | wc -w) 个插件）"
+
+echo "==> 7. 验证 dump-config"
 for prof in headless tui; do
   echo "  --- $prof ---"
   dsh --dump-config --profile $prof >/dev/null 2>&1 && echo "  OK" || echo "  FAILED"

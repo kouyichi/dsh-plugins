@@ -1,0 +1,8 @@
+{
+  "name": "dsh-scaffold",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "Plugin dev toolchain for dsh: scaffold rc.6-compliant plugin skeletons, verify plugin registration with a mock ctx, and check API compatibility against the installed dsh version."
+}
