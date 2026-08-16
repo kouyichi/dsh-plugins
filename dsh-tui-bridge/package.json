@@ -1,8 +1,12 @@
 {
   "name": "dsh-tui-bridge",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "./index.js",
-  "description": "TUI brick foundation: provides the tuiExtensions service (command/panel/statusField/theme/inputHook registry) that all dsh-tui-* bricks inject. Zero dependencies, activates first, keeps the activation graph acyclic."
+  "description": "TUI brick foundation: provides the tuiExtensions service (command/panel/statusField/theme/inputHook registry) that all dsh-tui-* bricks inject. Zero dependencies, activates first, keeps the activation graph acyclic.",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }

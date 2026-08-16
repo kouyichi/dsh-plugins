@@ -1,8 +1,12 @@
 {
   "name": "dsh-tui-keymap",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "./index.js",
-  "description": "TUI brick: leader-key bindings (ctrl+x m/c/t/x/u/s = model/compact/theme/export/undo/usage) + busy queue (Alt+Enter queue, Alt+Up take back) — OpenCode/Pi style."
+  "description": "TUI brick: leader-key bindings (ctrl+x m/c/t/x/u/s = model/compact/theme/export/undo/usage) + busy queue (Alt+Enter queue, Alt+Up take back) — OpenCode/Pi style.",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }

@@ -1,8 +1,12 @@
 {
   "name": "dsh-tui-search",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "./index.js",
-  "description": "TUI brick: /search — cross-session full-text search panel (sessionQuery service), extracted from the TUI core."
+  "description": "TUI brick: /search — cross-session full-text search panel (sessionQuery service), extracted from the TUI core.",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }

@@ -1,8 +1,12 @@
 {
   "name": "dsh-tui-a2a",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "./index.js",
-  "description": "TUI brick: A2A dispatch (@hermes/@claude/@codex/@dsh + /agents) — moved out of the TUI core into a standalone brick; onSubmit hook handles @mention, onSuggest adds @agent completion."
+  "description": "TUI brick: A2A dispatch (@hermes/@claude/@codex/@dsh + /agents) — moved out of the TUI core into a standalone brick; onSubmit hook handles @mention, onSuggest adds @agent completion.",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }

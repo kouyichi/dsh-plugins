@@ -1,0 +1,4 @@
+# dsh.bundle install patch — inserted into the target profile on `dsh plugin add`.
+- insert:
+    - id: dsh-tui-keymap
+      name: dsh-tui-keymap

@@ -28,7 +28,8 @@ echo "  ✓ 工作区干净"
 
 echo "== [1b/5] awesome-dsh-plugin 收录状态检查（dsh.bundle + cordis.patch.yml）=="
 MISSING=0
-for p in dsh-learn dsh-profile dsh-dream dsh-tower dsh-kanban dsh-scaffold dsh-guard dsh-xray dsh-cron dsh-bench dsh-pack dsh-a2a dsh-meter; do
+for p in dsh-learn dsh-profile dsh-dream dsh-tower dsh-kanban dsh-scaffold dsh-guard dsh-xray dsh-cron dsh-bench dsh-pack dsh-a2a dsh-meter \
+         dsh-tui-bridge dsh-tui-compact dsh-tui-usage dsh-tui-context dsh-tui-export dsh-tui-theme dsh-tui-todos dsh-tui-history dsh-tui-keymap dsh-tui-commands dsh-tui-btw dsh-tui-update dsh-tui-goals dsh-tui-find dsh-tui-a2a dsh-tui-search dsh-tui-trajectory dsh-tui-feedback; do
   BUNDLE=$(node -e "const p=require('./$p/package.json'); console.log(p.dsh?.bundle?.patch ? 'ok' : 'MISSING')" 2>/dev/null)
   PATCH=$([ -f "$p/cordis.patch.yml" ] && echo ok || echo MISSING)
   if [ "$BUNDLE" = "MISSING" ] || [ "$PATCH" = "MISSING" ]; then
@@ -37,7 +38,7 @@ for p in dsh-learn dsh-profile dsh-dream dsh-tower dsh-kanban dsh-scaffold dsh-g
   fi
 done
 if [ $MISSING -eq 1 ]; then echo "  请先补齐 dsh.bundle manifest 与 cordis.patch.yml（awesome-dsh-plugin 硬性要求）"; exit 1; fi
-echo "  ✓ 13 插件全部声明 dsh.bundle + cordis.patch.yml"
+echo "  ✓ 31 插件全部声明 dsh.bundle + cordis.patch.yml"
 BRANCH=$(git branch --show-current)
 echo "  ✓ 当前分支: $BRANCH"
 

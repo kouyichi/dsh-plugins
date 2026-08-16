@@ -1,8 +1,12 @@
 {
   "name": "dsh-tui-compact",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "./index.js",
-  "description": "TUI brick: real /compact — invokes the base compaction seam (ctx.compaction.compactNow) with before/after token feedback. Stub-free."
+  "description": "TUI brick: real /compact — invokes the base compaction seam (ctx.compaction.compactNow) with before/after token feedback. Stub-free.",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }

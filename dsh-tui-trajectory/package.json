@@ -1,8 +1,12 @@
 {
   "name": "dsh-tui-trajectory",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "./index.js",
-  "description": "TUI brick: /trajectory — step-through panel over the current session's rendered events (extracted from the TUI core)."
+  "description": "TUI brick: /trajectory — step-through panel over the current session's rendered events (extracted from the TUI core).",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }

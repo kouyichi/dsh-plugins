@@ -1,8 +1,12 @@
 {
   "name": "dsh-tui-find",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "./index.js",
-  "description": "TUI brick: /find <关键词> — search INSIDE the current session transcript (user+assistant text), selectable hits that jump to the message."
+  "description": "TUI brick: /find <关键词> — search INSIDE the current session transcript (user+assistant text), selectable hits that jump to the message.",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }

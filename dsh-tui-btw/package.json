@@ -1,8 +1,12 @@
 {
   "name": "dsh-tui-btw",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "./index.js",
-  "description": "TUI brick: /btw <问题> — side-session question in a new tab (main thread untouched), Kimi/Claude /btw pattern."
+  "description": "TUI brick: /btw <问题> — side-session question in a new tab (main thread untouched), Kimi/Claude /btw pattern.",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }
