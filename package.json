@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "dsh plugin family: shared dependency root so every plugin can import @deepseek-ai/* seam packages from its real location (ESM resolution walks up from /workspace/algorithm/dsh-plugins/).",
+  "scripts": {
+    "test": "node verify.mjs"
+  },
   "dependencies": {
     "@deepseek-ai/dsh-agent": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-llm": "^0.1.0-rc.6",
