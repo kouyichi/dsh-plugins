@@ -169,12 +169,12 @@ export function apply(ctx) {
           if (meaningful.length) finalText = meaningful.join("\n").slice(-16000);
         }
       };
-      agent.ctx.on("session/event", onEvent);
+      const unsubEvents = agent.ctx.on("session/event", onEvent);
       const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
       await agent.whenIdle();
       agent.followup(createUserMessage({ content: [{ type: "text", text }], source: { kind: "user" } }));
       await agent.whenIdle();
-      agent.ctx.off("session/event", onEvent);
+      if (typeof unsubEvents === "function") unsubEvents();
       try { await ctx.get("sessions").flush(agent.session); } catch { /* ignore */ }
       dispose();
       task.status = taskStatus(STATUS.completed);

@@ -132,14 +132,14 @@ async function runJobOnce(ctx, agents, job) {
         if (meaningful.length) finalText = meaningful.join("\n").slice(-4000);
       }
     };
-    agent.ctx.on("session/event", onEvent);
+    const unsubEvents = agent.ctx.on("session/event", onEvent);
     const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
     await agent.whenIdle();
     agent.followup(createUserMessage({ content: [{ type: "text", text: `【cron 任务 ${job.name}】\n${job.prompt}\n\n完成后给出简短结果摘要。` }], source: { kind: "user" } }));
     await agent.whenIdle();
     agent.cancel({ kind: "interrupted" });
     await ctx.get("sessions").flush(agent.session);
-    agent.ctx.off("session/event", onEvent);
+    if (typeof unsubEvents === "function") unsubEvents();
     dispose();
     return { ok: true, text: finalText || "（无文本输出）", durationMs: now() - startedAt };
   } catch (err) {

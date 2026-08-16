@@ -90,7 +90,7 @@ async function runTask(ctx, agents, task) {
         if (meaningful.length) finalText = meaningful.join("\n").slice(-8000);
       }
     };
-    agent.ctx.on("session/event", onEvent);
+    const unsubEvents = agent.ctx.on("session/event", onEvent);
     const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
     await agent.whenIdle();
     agent.followup(createUserMessage({
@@ -100,7 +100,7 @@ async function runTask(ctx, agents, task) {
     await agent.whenIdle();
     agent.cancel({ kind: "interrupted" });
     try { await ctx.get("sessions").flush(agent.session); } catch { /* ignore */ }
-    agent.ctx.off("session/event", onEvent);
+    if (typeof unsubEvents === "function") unsubEvents();
     dispose();
     const durationMs = now() - startedAt;
     const expect = Array.isArray(task.expect) ? task.expect : (task.expect ? [task.expect] : []);
