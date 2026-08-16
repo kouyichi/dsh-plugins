@@ -47,6 +47,8 @@ export function createExtensions() {
     onDoubleEsc: [],       // fn({ctl, store})
     onAltEnter: [],        // fn(text, {ctl, store})
     onAltUp: [],           // fn({ctl, store})
+    onSubmit: [],          // fn(text, {ctl, store}) -> true = consumed (skip agent submit)
+    onSuggest: [],         // fn(buffer) -> string[] extra completion candidates
   };
 
   return {
@@ -85,10 +87,14 @@ export function createExtensions() {
       if (typeof hook.onDoubleEsc === "function") inputHooks.onDoubleEsc.push(hook.onDoubleEsc);
       if (typeof hook.onAltEnter === "function") inputHooks.onAltEnter.push(hook.onAltEnter);
       if (typeof hook.onAltUp === "function") inputHooks.onAltUp.push(hook.onAltUp);
+      if (typeof hook.onSubmit === "function") inputHooks.onSubmit.push(hook.onSubmit);
+      if (typeof hook.onSuggest === "function") inputHooks.onSuggest.push(hook.onSuggest);
       return () => {
         inputHooks.onDoubleEsc = inputHooks.onDoubleEsc.filter((f) => f !== hook.onDoubleEsc);
         inputHooks.onAltEnter = inputHooks.onAltEnter.filter((f) => f !== hook.onAltEnter);
         inputHooks.onAltUp = inputHooks.onAltUp.filter((f) => f !== hook.onAltUp);
+        inputHooks.onSubmit = inputHooks.onSubmit.filter((f) => f !== hook.onSubmit);
+        inputHooks.onSuggest = inputHooks.onSuggest.filter((f) => f !== hook.onSuggest);
       };
     },
   };

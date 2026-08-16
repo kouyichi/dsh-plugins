@@ -1,0 +1,8 @@
+{
+  "name": "dsh-tui-feedback",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "TUI brick: /feedback up|down [note] — message feedback to ~/.dsh/feedback.json (extracted from the TUI core)."
+}

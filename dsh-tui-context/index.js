@@ -30,6 +30,21 @@ export function apply(ctx) {
     return;
   }
   const disposers = [];
+  let ctxWindow = null;
+
+  // Resolve the model's context window lazily (moved out of the TUI core:
+  // this is brick business, not core business).
+  (async () => {
+    try {
+      const llm = ctx.get("llm");
+      const sel = ctx.get("agentDefaultModel")?.currentSelection?.();
+      if (llm?.listModels && sel?.provider && sel?.model) {
+        const models = await llm.listModels(sel.provider);
+        const cur = models.find((m) => m.id === sel.model);
+        if (cur?.contextWindow) ctxWindow = Number(cur.contextWindow);
+      }
+    } catch { /* non-fatal: falls back to 128k */ }
+  })();
 
   disposers.push(ext.registerCommand({
     name: "/context",
@@ -58,8 +73,8 @@ export function apply(ctx) {
       const lines = [];
       const s = store.stats || {};
       const used = s.totalTokens || 0;
-      // window: prefer the model's declared contextWindow (resolved lazily).
-      let win = store.ctxWindow || 128000;
+      // window: brick-resolved model contextWindow, else 128k default.
+      const win = ctxWindow || 128000;
       const pct = Math.min(1, used / win);
       lines.push(`模型窗口: ${(win / 1000).toFixed(0)}k tokens（${store.meta?.model ?? "?"}）`);
       lines.push(`当前占用: ${(used / 1000).toFixed(1)}k tokens`);

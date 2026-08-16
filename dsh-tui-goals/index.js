@@ -31,6 +31,14 @@ export function apply(ctx) {
   disposers.push(() => ctx.off?.("session/event", onEvent));
 
   disposers.push(ext.registerCommand({
+    name: "/goal",
+    busySafe: true,
+    handler(full, ctl, store) {
+      ctl.openExtPanel("goals");
+    },
+  }));
+
+  disposers.push(ext.registerCommand({
     name: "/goals",
     busySafe: true,
     handler(full, ctl) {
