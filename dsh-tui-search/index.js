@@ -22,6 +22,7 @@ export function apply(ctx) {
 
   disposers.push(ext.registerCommand({
     name: "/search",
+    description: "全文搜索历史会话（内核 sessionQuery）",
     busySafe: true,
     handler(full, ctl, store) {
       const q = full.slice("/search".length).trim();

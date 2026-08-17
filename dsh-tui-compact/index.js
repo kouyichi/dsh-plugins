@@ -28,6 +28,7 @@ export function apply(ctx) {
   disposers.push(ext.registerCommand({
     name: "/compact",
     busySafe: false, // compaction needs an idle agent
+    description: "压缩会话历史（内核 /compact 优先，本砖兜底）",
     async handler(full, ctl, store) {
       const compaction = ctx.get("compaction");
       const agents = ctx.get("agents");
@@ -39,6 +40,20 @@ export function apply(ctx) {
       if (!parent) {
         ctl.notice("error", "没有可用 agent 会话");
         return;
+      }
+      // 内核 /compact 命令（dsh-command-compact）存在时转发内核执行——
+      // 核心命令桥已优先接管，本分支只在桥缺失/命令未注册时兜底。
+      const dshCmds = ctx.get("commands");
+      if (dshCmds?.execute) {
+        try {
+          if (dshCmds.list?.(parent)?.some((d) => d.name === "compact")) {
+            const exec = await dshCmds.execute(parent, full, AbortSignal.timeout(60000));
+            ctl.notice("info", exec?.result?.text ?? "✓ 已由内核 /compact 处理");
+            return;
+          }
+        } catch (e) {
+          ctl.notice("warning", `内核 /compact 执行失败，回退本砖实现: ${e.message}`);
+        }
       }
       if (store.get().input?.busy) {
         ctl.notice("warning", "agent 正忙，请在空闲时压缩（Ctrl+C 可中断当前回合）");

@@ -48,6 +48,7 @@ export function apply(ctx) {
 
   disposers.push(ext.registerCommand({
     name: "/context",
+    description: "上下文占用面板",
     busySafe: true,
     handler(full, ctl) {
       ctl.openExtPanel("context");

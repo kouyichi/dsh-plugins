@@ -33,7 +33,27 @@ export function apply(ctx) {
   disposers.push(ext.registerCommand({
     name: "/goal",
     busySafe: true,
-    handler(full, ctl, store) {
+    description: "查看/创建目标（内核 /goal 全语法优先；本砖兜底打开目标面板）",
+    handler(full, ctl) {
+      // 内核 /goal 命令（dsh-command-goal，支持 objective|clear|edit|pause|resume）
+      // 存在时转发内核执行——核心命令桥已优先接管，本分支只在桥缺失时兜底。
+      const agents = ctx.get("agents");
+      const parent = agents?.currentInitiator?.() ?? agents?.roots?.()?.[0];
+      const dshCmds = ctx.get("commands");
+      if (parent && dshCmds?.execute) {
+        try {
+          if (dshCmds.list?.(parent)?.some((d) => d.name === "goal")) {
+            dshCmds.execute(parent, full, AbortSignal.timeout(60000)).then((exec) => {
+              const r = exec?.result;
+              ctl.notice("info", r?.text ?? (r?.kind === "success" ? "✓ 已由内核 /goal 处理" : ""));
+            }).catch((e) => {
+              ctl.notice("warning", `内核 /goal 执行失败，回退本砖面板: ${e.message}`);
+              ctl.openExtPanel("goals");
+            });
+            return;
+          }
+        } catch { /* fall through to panel */ }
+      }
       ctl.openExtPanel("goals");
     },
   }));

@@ -91,6 +91,7 @@ export function apply(ctx) {
 
   disposers.push(ext.registerCommand({
     name: "/agents",
+    description: "A2A agent 网络面板；@name 派活",
     busySafe: true,
     handler(full, ctl) {
       ctl.openExtPanel("a2a");

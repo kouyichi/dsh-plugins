@@ -59,6 +59,7 @@ export function apply(ctx) {
 
   disposers.push(ext.registerCommand({
     name: "/undo",
+    description: "重发上一条输入",
     busySafe: false,
     handler(full, ctl) {
       const arg = full.slice("/undo".length).trim();

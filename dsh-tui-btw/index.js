@@ -21,6 +21,7 @@ export function apply(ctx) {
 
   disposers.push(ext.registerCommand({
     name: "/btw",
+    description: "开侧会话提问（不打扰主线）",
     busySafe: true,
     async handler(full, ctl) {
       const q = full.slice("/btw".length).trim();

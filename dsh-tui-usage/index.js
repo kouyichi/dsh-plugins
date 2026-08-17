@@ -103,6 +103,7 @@ export function apply(ctx) {
 
   disposers.push(ext.registerCommand({
     name: "/usage",
+    description: "用量与成本面板",
     busySafe: true,
     handler(full, ctl) {
       ctl.openExtPanel("usage");
@@ -127,7 +128,27 @@ export function apply(ctx) {
     async load(store) {
       const p = loadPricing();
       const lines = [];
-      const s = store.stats || {};
+      // 优先内核投影（sessionProjections → sessionStats + tokenUsage，web 同款数据源），
+      // 投影不可用（服务未挂/会话未就绪）时回退核心 store.stats（事件聚合）。
+      let s = null;
+      try {
+        const agents = ctx.get("agents");
+        const proj = ctx.get("sessionProjections");
+        const parent = agents?.currentInitiator?.() ?? agents?.roots?.()?.[0];
+        if (parent && proj?.snapshot) {
+          const values = proj.snapshot(parent.session)?.values ?? {};
+          const stats = values.sessionStats ?? {};
+          const usage = values.tokenUsage ?? {};
+          s = {
+            cacheRead: usage.cacheReadTokens ?? 0,
+            uncachedInput: usage.uncachedInputTokens ?? 0,
+            decodeTokens: usage.outputTokens ?? stats.decodeTokens ?? 0,
+            turns: stats.turns ?? 0,
+            steps: stats.steps ?? 0,
+          };
+        }
+      } catch { s = null; }
+      if (!s) s = store.stats || {};
       const totalIn = (s.cacheRead || 0) + (s.uncachedInput || 0);
       const hit = totalIn > 0 ? Math.round((s.cacheRead || 0) / totalIn * 100) : 0;
       const cur = {

@@ -55,6 +55,7 @@ export function apply(ctx) {
 
   disposers.push(ext.registerCommand({
     name: "/find",
+    description: "当前会话内过滤查找",
     busySafe: true,
     handler(full, ctl, store) {
       const q = full.slice("/find".length).trim().toLowerCase();

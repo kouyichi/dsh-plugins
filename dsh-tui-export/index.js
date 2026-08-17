@@ -127,6 +127,7 @@ export function apply(ctx) {
 
   disposers.push(ext.registerCommand({
     name: "/export",
+    description: "导出当前会话为 markdown",
     busySafe: true,
     async handler(full, ctl, store) {
       const sessionId = store.meta?.sessionId;

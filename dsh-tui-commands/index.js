@@ -68,6 +68,7 @@ export function apply(ctx) {
         disposers.push(ext.registerCommand({
           name,
           busySafe: false,
+          description: desc ?? "自定义命令（~/.dsh/tui-commands/*.md）",
           handler(full, ctl) {
             const args = full.slice(name.length).trim();
             let prompt = body
@@ -93,6 +94,7 @@ export function apply(ctx) {
 
   disposers.push(ext.registerCommand({
     name: "/init",
+    description: "生成 AGENTS.md 项目指引",
     busySafe: true,
     handler(full, ctl, store) {
       const cwd = store.meta?.cwd ?? process.cwd();

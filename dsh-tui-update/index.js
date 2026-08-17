@@ -56,6 +56,7 @@ export function apply(ctx) {
 
   disposers.push(ext.registerCommand({
     name: "/update",
+    description: "检查 dsh 新版本",
     busySafe: true,
     handler(full, ctl) {
       ctl.notice("info", "正在检查 npm…");

@@ -48,6 +48,7 @@ export function apply(ctx) {
 
   disposers.push(ext.registerCommand({
     name: "/theme",
+    description: "切换主题",
     busySafe: true,
     handler(full, ctl, store) {
       const arg = full.slice("/theme".length).trim();

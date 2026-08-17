@@ -37,6 +37,7 @@ export function apply(ctx) {
 
   disposers.push(ext.registerCommand({
     name: "/todos",
+    description: "任务列表面板",
     busySafe: true,
     handler(full, ctl) {
       ctl.openExtPanel("todos");

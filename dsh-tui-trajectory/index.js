@@ -34,6 +34,7 @@ export function apply(ctx) {
 
   disposers.push(ext.registerCommand({
     name: "/trajectory",
+    description: "工具调用轨迹",
     busySafe: true,
     handler(full, ctl) {
       ctl.openExtPanel("trajectory");
