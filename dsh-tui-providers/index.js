@@ -54,24 +54,106 @@ const DEFAULT_PROVIDERS = [
     baseURL: "http://127.0.0.1:8899",
     apiKeyEnv: "DEEPSEEK_API_KEY",
     defaultContextWindow: 128000,
+    efforts: ["off", "high", "max"],
     models: [
-      { id: "deepseek-v4-flash", name: "DeepSeek-V4-Flash", contextWindow: 128000 },
-      { id: "deepseek-v4-pro", name: "DeepSeek-V4-Pro", contextWindow: 128000 },
+      { id: "deepseek-v4-flash", name: "DeepSeek-V4-Flash", contextWindow: 128000, efforts: ["off", "high", "max"] },
+      { id: "deepseek-v4-pro", name: "DeepSeek-V4-Pro", contextWindow: 128000, efforts: ["off", "high", "max"] },
     ],
+  },
+  {
+    name: "openai",
+    displayName: "OpenAI (CRS 网关)",
+    baseURL: "http://10.100.154.16:3000/openai/v1",
+    apiKeyEnv: "OPENAI_API_KEY",
+    defaultContextWindow: 128000,
+    efforts: ["off", "low", "medium", "high", "max"],
+    models: [
+      { id: "gpt-5.6-sol", name: "GPT-5.6-Sol", contextWindow: 128000, efforts: ["off", "low", "medium", "high", "max"] },
+      { id: "gpt-4o", name: "GPT-4o", contextWindow: 128000, efforts: ["off", "low", "high"] },
+      { id: "gpt-4.1", name: "GPT-4.1", contextWindow: 128000, efforts: ["off", "low", "high"] },
+    ],
+    stripToolFields: ["sandbox_permissions", "justification", "timeoutMs", "run_in_background", "workdir"],
+    extraSystem: "Current sandbox mode is danger-full-access. Do NOT request sandbox escalation and do NOT pass sandbox_permissions, justification or workdir parameters to the bash tool — the harness sets them. Just pass command and description.",
   },
   {
     name: "openrouter",
     displayName: "OpenRouter",
     baseURL: "https://openrouter.ai/api/v1",
     apiKeyEnv: "OPENROUTER_API_KEY",
-    models: [{ id: "anthropic/claude-sonnet-4-5", name: "Claude Sonnet 4.5" }],
+    defaultContextWindow: 200000,
+    efforts: ["off", "low", "high"],
+    models: [
+      { id: "anthropic/claude-sonnet-4-5", name: "Claude Sonnet 4.5", contextWindow: 200000, efforts: ["off", "low", "high"] },
+      { id: "openai/gpt-4o", name: "GPT-4o", contextWindow: 128000, efforts: ["off", "low", "high"] },
+    ],
+  },
+  {
+    name: "anthropic",
+    displayName: "Anthropic",
+    baseURL: "https://api.anthropic.com/v1",
+    apiKeyEnv: "ANTHROPIC_API_KEY",
+    defaultContextWindow: 200000,
+    efforts: ["off", "low", "high"],
+    models: [
+      { id: "claude-opus-4-5", name: "Claude Opus 4.5", contextWindow: 200000, efforts: ["off", "low", "high"] },
+      { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", contextWindow: 200000, efforts: ["off", "low", "high"] },
+    ],
+  },
+  {
+    name: "gemini",
+    displayName: "Google Gemini",
+    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
+    apiKeyEnv: "GEMINI_API_KEY",
+    defaultContextWindow: 1000000,
+    efforts: ["off", "low", "high"],
+    models: [
+      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", contextWindow: 1000000, efforts: ["off", "low", "high"] },
+      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", contextWindow: 1000000, efforts: ["off", "low", "high"] },
+    ],
   },
   {
     name: "ollama",
     displayName: "Ollama (local)",
     baseURL: "http://127.0.0.1:11434/v1",
     apiKeyEnv: "OLLAMA_API_KEY",
-    models: [{ id: "qwen3:8b", name: "Qwen3 8B" }],
+    defaultContextWindow: 32768,
+    efforts: ["off"],
+    models: [
+      { id: "qwen3:8b", name: "Qwen3 8B", contextWindow: 32768, efforts: ["off"] },
+      { id: "llama3.3:70b", name: "Llama 3.3 70B", contextWindow: 131072, efforts: ["off"] },
+    ],
+  },
+  {
+    name: "vllm",
+    displayName: "vLLM (local)",
+    baseURL: "http://127.0.0.1:8000/v1",
+    apiKeyEnv: "VLLM_API_KEY",
+    defaultContextWindow: 32768,
+    efforts: ["off"],
+    models: [{ id: "local-model", name: "Local vLLM model", contextWindow: 32768, efforts: ["off"] }],
+  },
+  {
+    name: "qwen",
+    displayName: "Qwen (阿里云)",
+    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    apiKeyEnv: "QWEN_API_KEY",
+    defaultContextWindow: 131072,
+    efforts: ["off", "low", "high", "max"],
+    models: [
+      { id: "qwen-max", name: "Qwen-Max", contextWindow: 131072, efforts: ["off", "low", "high", "max"] },
+      { id: "qwen3-coder-plus", name: "Qwen3-Coder-Plus", contextWindow: 131072, efforts: ["off", "low", "high"] },
+    ],
+  },
+  {
+    name: "kimi",
+    displayName: "Kimi (Moonshot)",
+    baseURL: "https://api.moonshot.cn/v1",
+    apiKeyEnv: "KIMI_API_KEY",
+    defaultContextWindow: 131072,
+    efforts: ["off", "low", "high"],
+    models: [
+      { id: "kimi-k3", name: "Kimi K3", contextWindow: 131072, efforts: ["off", "low", "high"] },
+    ],
   },
 ];
 
@@ -89,7 +171,27 @@ function ensureConfig() {
   if (!cfg || !Array.isArray(cfg.providers) || cfg.providers.length === 0) {
     cfg = { providers: DEFAULT_PROVIDERS };
     saveConfig(cfg);
+    return cfg;
   }
+  // Migrate existing configs: fold in new default fields (efforts,
+  // stripToolFields, extraSystem, defaultContextWindow) for known providers
+  // while keeping the user's baseURL/keyEnv/models.
+  const byName = new Map(DEFAULT_PROVIDERS.map((p) => [p.name, p]));
+  let changed = false;
+  for (const p of cfg.providers) {
+    const def = byName.get(p.name);
+    if (!def) continue;
+    for (const k of ["efforts", "stripToolFields", "extraSystem", "defaultContextWindow"]) {
+      if (p[k] === undefined && def[k] !== undefined) { p[k] = def[k]; changed = true; }
+    }
+    if (Array.isArray(p.models) && Array.isArray(def.models)) {
+      for (const m of p.models) {
+        const dm = def.models.find((x) => x.id === (typeof m === "string" ? m : m.id));
+        if (dm && typeof m === "object" && m.efforts === undefined && dm.efforts) { m.efforts = dm.efforts; changed = true; }
+      }
+    }
+  }
+  if (changed) saveConfig(cfg);
   return cfg;
 }
 
@@ -102,20 +204,22 @@ function toConnection(p) {
     defaultContextWindow: p.defaultContextWindow ?? 128000,
     maxTokens: p.maxTokens,
     defaults: { thinking: p.thinking, reasoningEffort: p.reasoningEffort },
+    efforts: Array.isArray(p.efforts) ? p.efforts : ["off", "low", "high", "max"],
     extraHeaders: p.extraHeaders,
     extraSystem: p.extraSystem,
     stripToolFields: Array.isArray(p.stripToolFields) ? p.stripToolFields : undefined,
   };
 }
 
-/** Probe {baseURL}/models with the provider key; returns status string. */
-async function probeProvider(ctx, conn) {
+/** Probe {baseURL}/models with the provider key; returns status + model/effort info. */
+async function probeProvider(ctx, conn, p) {
   const credentials = ctx.get("credentials");
   let apiKey;
   try {
     const hit = credentials ? await credentials.resolve(conn.apiKeyEnv) : undefined;
     apiKey = hit?.value ?? process.env[conn.apiKeyEnv] ?? "";
   } catch { apiKey = ""; }
+  const effortInfo = conn.efforts?.length ? `力度 ${conn.efforts.join("/")}` : "";
   try {
     const res = await fetch(`${conn.baseURL}/models`, {
       headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
@@ -124,11 +228,13 @@ async function probeProvider(ctx, conn) {
     if (res.ok) {
       const data = await res.json();
       const ids = (data.data ?? []).map((m) => m.id);
-      return `✓ ${ids.length} 模型${ids.length ? "（" + ids.slice(0, 3).join(", ") + "…）" : ""}`;
+      const verified = ids.filter((id) => (p?.models ?? []).some((m) => (typeof m === "string" ? m : m.id) === id));
+      const note = verified.length ? `✓ 验证 ${verified.length}/${ids.length}（${verified.slice(0, 3).join(", ")}…）` : `✓ 网关 ${ids.length} 模型（配置未匹配，用预置 ${conn.models.length}）`;
+      return `${note} · ${effortInfo}`;
     }
-    return `✗ HTTP ${res.status}`;
+    return `✗ HTTP ${res.status} · 预置 ${conn.models.length} 模型 · ${effortInfo}`;
   } catch (e) {
-    return `✗ ${e.message?.slice(0, 40) ?? e}`;
+    return `✗ ${e.message?.slice(0, 30) ?? e} · 预置 ${conn.models.length} 模型 · ${effortInfo}`;
   }
 }
 
@@ -170,6 +276,69 @@ export function apply(ctx) {
     return store.meta?.provider ?? "?";
   }
 
+  /* -------- model catalog (feeds the core /model picker) -------- */
+  disposers.push(ext.registerModelCatalog(async () => {
+    const groups = [];
+    for (const p of cfg.providers) {
+      const conn = toConnection(p);
+      const models = conn.models.length
+        ? conn.models
+        : (() => {
+            try {
+              return [];
+            } catch { return []; }
+          })();
+      groups.push({
+        provider: p.name,
+        providerName: p.displayName ?? p.name,
+        efforts: conn.efforts,
+        items: models.map((m) => ({
+          id: m.id,
+          name: m.name ?? m.id,
+          contextWindow: m.contextWindow ?? conn.defaultContextWindow,
+          efforts: Array.isArray(m.efforts) ? m.efforts : conn.efforts,
+        })),
+      });
+    }
+    return groups;
+  }));
+
+  /* -------- /effort (Claude Code style: switch reasoning effort now) -------- */
+  disposers.push(ext.registerCommand({
+    name: "/effort",
+    busySafe: false,
+    handler(full, ctl, store) {
+      const arg = full.slice("/effort".length).trim().toLowerCase();
+      const known = ["off", "low", "medium", "high", "max"];
+      if (!known.includes(arg)) {
+        ctl.notice("warning", `用法: /effort <${known.join("|")}>（Claude Code 式；立即生效）`);
+        return;
+      }
+      const sel = ctx.get("agentDefaultModel")?.currentSelection?.();
+      if (!sel) {
+        ctl.notice("error", "无法读取当前模型选择");
+        return;
+      }
+      // 校验当前模型是否支持该力度（预置表）
+      const conn = toConnection(cfg.providers.find((p) => p.name === sel.provider) ?? {});
+      const supported = conn.efforts ?? known;
+      if (!supported.includes(arg)) {
+        ctl.notice("warning", `${sel.provider} 的模型力度集合为 ${supported.join("/")}，不支持 ${arg}；用 /model 选模型后 e 遍历`);
+        return;
+      }
+      (async () => {
+        try {
+          const m = ctx.get("agentDefaultModel");
+          await m.saveSelection({ provider: sel.provider, model: sel.model, reasoningEffort: arg });
+          ctl.updateSelection({ reasoningEffort: arg });
+          ctl.notice("success", `推理力度 → ${arg}（立即生效）`);
+        } catch (e) {
+          ctl.notice("error", `切换失败: ${e.message}`);
+        }
+      })();
+    },
+  }));
+
   /* -------- /providers panel -------- */
   disposers.push(ext.registerCommand({
     name: "/providers",
@@ -199,7 +368,7 @@ export function apply(ctx) {
         } catch (e) { credState = `key ✗${e.message?.slice(0, 30)}`; }
         const conn = toConnection(p);
         const mark = p.name === current ? "▶" : " ";
-        const status = await probeProvider(ctx, conn);
+        const status = await probeProvider(ctx, conn, p);
         lines.push(`${mark} ${p.displayName} (${p.name})`);
         lines.push(`   ${conn.baseURL} · ${credState} · ${status}`);
       }
@@ -270,7 +439,9 @@ export function apply(ctx) {
           if (defaultModel?.saveSelection) {
             await defaultModel.saveSelection({ provider: target.name, model, reasoningEffort: "high" });
           }
-          ctl.notice("success", `已切换 provider → ${target.name}（${model}）。下一条消息生效；/model 可换模型`);
+          // apply immediately to the running agent (mutable selection snapshot)
+          ctl.updateSelection({ provider: target.name, model, reasoningEffort: "high" });
+          ctl.notice("success", `已切换 provider → ${target.name}（${model}）。立即生效；/model 可换模型与力度`);
         } catch (e) {
           ctl.notice("error", `切换失败: ${e.message}`);
         }

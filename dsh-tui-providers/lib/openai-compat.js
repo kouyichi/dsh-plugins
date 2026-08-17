@@ -375,13 +375,27 @@ export class OpenAICompatAdapter extends LlmAdapter {
       return Promise.resolve({ provider, id: model, name: model, inputModalities: ["text"] });
     }
     const thinking = conn.defaults?.thinking;
+    // Model effort set: configured per model > provider efforts > deepseek-like default
+    const effortIds = configured?.efforts ?? conn.efforts;
+    const efforts = effortIds
+      ? effortIds.map((e) => ({ id: ReasoningEffortId(e), name: e[0].toUpperCase() + e.slice(1) }))
+      : REASONING_EFFORTS;
+    // Default effort must be a member of the model's own effort set, or the
+    // harness rejects it (INVALID_MODEL_REASONING) and every turn fails —
+    // e.g. ollama qwen3:8b declares efforts ["off"] only.
+    const hasEffort = (id) => efforts.some((e) => e.id === id);
+    const defaultEffort =
+      conn.defaults?.reasoningEffort === "off" && hasEffort(OFF_REASONING_EFFORT) ? OFF_REASONING_EFFORT
+      : conn.defaults?.reasoningEffort === "max" && hasEffort(MAX_REASONING_EFFORT) ? MAX_REASONING_EFFORT
+      : hasEffort(HIGH_REASONING_EFFORT) ? HIGH_REASONING_EFFORT
+      : efforts[0]?.id ?? OFF_REASONING_EFFORT;
     return Promise.resolve({
       ...(configured === undefined ? { provider, id: model, name: model, inputModalities: ["text"] } : modelInfo(provider, configured)),
       context: { contextWindow },
       defaultMaxTokens: configured?.maxTokens ?? conn.maxTokens,
       ...(thinking === "disabled"
         ? { reasoning: { efforts: OFF_ONLY_REASONING_EFFORTS, defaultEffort: OFF_REASONING_EFFORT } }
-        : { reasoning: { efforts: REASONING_EFFORTS, defaultEffort: conn.defaults?.reasoningEffort === "off" ? OFF_REASONING_EFFORT : conn.defaults?.reasoningEffort === "max" ? MAX_REASONING_EFFORT : HIGH_REASONING_EFFORT } }),
+        : { reasoning: { efforts, defaultEffort } }),
     });
   }
 

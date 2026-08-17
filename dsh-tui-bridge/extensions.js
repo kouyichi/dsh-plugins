@@ -42,6 +42,7 @@ export function createExtensions() {
   const panels = new Map();        // id -> {id, title, load(store) -> {lines}}
   const statusFields = new Map();  // id -> {id, order, render(store) -> string}
   const themes = new Map();        // name -> {name, codes}
+  const modelCatalogs = [];        // async () -> [{provider, providerName, items, efforts}]
   const inputHooks = {
     onLeader: new Map(),   // key char -> fn({ctl, store})
     onDoubleEsc: [],       // fn({ctl, store})
@@ -76,6 +77,24 @@ export function createExtensions() {
       if (!def?.name || typeof def.codes !== "object") throw new Error("tuiExtensions.registerTheme: name + codes required");
       themes.set(def.name, def);
       return () => themes.delete(def.name);
+    },
+    registerModelCatalog(fn) {
+      if (typeof fn !== "function") throw new Error("tuiExtensions.registerModelCatalog: async fn required");
+      modelCatalogs.push(fn);
+      return () => {
+        const i = modelCatalogs.indexOf(fn);
+        if (i >= 0) modelCatalogs.splice(i, 1);
+      };
+    },
+    async modelCatalog() {
+      const out = [];
+      for (const fn of modelCatalogs) {
+        try {
+          const groups = await fn();
+          if (Array.isArray(groups)) out.push(...groups);
+        } catch { /* a broken catalog must not break /model */ }
+      }
+      return out;
     },
     addInputHook(hook) {
       if (!hook) return () => {};
