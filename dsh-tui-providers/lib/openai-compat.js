@@ -14,15 +14,18 @@
 
 import {
   LlmAdapter, LlmError, CallId, EMPTY_RESPONSE_CODE, QUOTA_EXCEEDED_CODE,
-  CONTEXT_WINDOW_EXCEEDED_CODE, attributionHeaders, assertUsableApiKey,
+  CONTEXT_WINDOW_EXCEEDED_CODE, attributionHeaders, assertUsableApiKey, ReasoningEffortId, contentHasImage,
 } from "@deepseek-ai/dsh-llm";
 
-const OFF_REASONING_EFFORT = "off";
-const LOW_REASONING_EFFORT = "low";
-const HIGH_REASONING_EFFORT = "high";
-const MAX_REASONING_EFFORT = "max";
-const REASONING_EFFORTS = [OFF_REASONING_EFFORT, LOW_REASONING_EFFORT, HIGH_REASONING_EFFORT, MAX_REASONING_EFFORT];
-const OFF_ONLY_REASONING_EFFORTS = [OFF_REASONING_EFFORT];
+const OFF_REASONING_EFFORT = ReasoningEffortId("off");
+const HIGH_REASONING_EFFORT = ReasoningEffortId("high");
+const MAX_REASONING_EFFORT = ReasoningEffortId("max");
+const REASONING_EFFORTS = [
+  { id: OFF_REASONING_EFFORT, name: "Off" },
+  { id: HIGH_REASONING_EFFORT, name: "High" },
+  { id: MAX_REASONING_EFFORT, name: "Max" },
+];
+const OFF_ONLY_REASONING_EFFORTS = [{ id: OFF_REASONING_EFFORT, name: "Off" }];
 
 /* ------------------------------------------------------------------ */
 /* wire serialization                                                  */
@@ -32,32 +35,24 @@ function flattenText(content) {
   return (content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
 }
 
-function assertTextOnly(content) {
-  for (const block of content || []) {
-    if (block.type === "text" || block.type === "tool-result") continue;
-    throw new LlmError(`provider does not support ${block.type} content`, "INVALID_REQUEST");
-  }
+function assertTextOnly(blocks) {
+  if (contentHasImage(blocks)) throw new LlmError("The OpenAI-compatible adapter does not support image content.", "UNSUPPORTED_CONTENT");
 }
 
 function serializeAssistant(message) {
-  const out = { role: "assistant", content: "" };
-  for (const block of message.content) {
-    if (block.type === "text") {
-      out.content = (out.content || "") + block.text;
-    } else if (block.type === "tool-call") {
-      (out.tool_calls ??= []).push({
-        id: block.toolCallId,
-        type: "function",
-        function: { name: block.name, arguments: block.arguments },
-      });
-    } else if (block.type === "reasoning") {
-      // OpenAI-compatible reasoning_content is request-optional; DeepSeek
-      // providers accept it, others ignore unknown fields at their peril —
-      // keep it out of the wire by default.
-    }
-  }
-  if (out.content === "") delete out.content;
-  return out;
+  const text = flattenText(message.content);
+  const reasoning = message.content.filter((b) => b.type === "reasoning").map((b) => b.text).join("");
+  const toolCalls = message.content.filter((b) => b.type === "tool-call").map((b) => ({
+    id: b.id,
+    type: "function",
+    function: { name: b.name, arguments: b.arguments },
+  }));
+  return {
+    role: "assistant",
+    content: text,
+    ...(toolCalls.length > 0 && reasoning.length > 0 ? { reasoning_content: reasoning } : {}),
+    ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+  };
 }
 
 function serializeMessages(messages) {
@@ -85,20 +80,40 @@ function serializeMessages(messages) {
 function resolveThinking(options, defaults) {
   const thinking = options.reasoning?.thinking ?? defaults.thinking;
   const reasoningEffort = options.reasoning?.reasoningEffort ?? defaults.reasoningEffort;
+  // Only send these fields when the provider explicitly configured them.
+  // Some gateways (e.g. the CRS OpenAI-compatible gateway) reject
+  // thinking:{type:...} and reasoning_effort:"high" outright (they flip it
+  // into Codex mode and error "model not supported when using Codex"), so
+  // absent config = omit both.
   return {
     thinking: thinking === "enabled" ? "enabled" : thinking === "disabled" ? "disabled" : undefined,
-    reasoningEffort: reasoningEffort === "off" ? undefined : reasoningEffort,
+    reasoningEffort: reasoningEffort === "off" || reasoningEffort === undefined ? undefined : reasoningEffort,
   };
 }
 
-function serializeRequest(options, defaults) {
+function serializeRequest(options, defaults, stripToolFields) {
   const messages = [];
   if (options.system !== undefined) messages.push({ role: "system", content: options.system });
   messages.push(...serializeMessages(options.messages));
-  const tools = options.tools?.map((tool) => ({
-    type: "function",
-    function: { name: tool.name, description: tool.description, parameters: tool.parameters },
-  }));
+  const tools = options.tools?.map((tool) => {
+    const params = tool.parameters ? { ...tool.parameters } : undefined;
+    if (params && stripToolFields?.length) {
+      // Remove schema fields the model keeps misusing (e.g. bash
+      // sandbox_permissions/justification) so it cannot generate them.
+      const props = params.properties ? { ...params.properties } : undefined;
+      if (props) {
+        for (const f of stripToolFields) delete props[f];
+        params.properties = props;
+        if (Array.isArray(params.required)) {
+          params.required = params.required.filter((r) => !stripToolFields.includes(r));
+        }
+      }
+    }
+    return {
+      type: "function",
+      function: { name: tool.name, description: tool.description, parameters: params ?? { type: "object" } },
+    };
+  });
   const resolved = resolveThinking(options, defaults);
   return {
     model: options.model,
@@ -165,15 +180,17 @@ function mapUsage(usage) {
 }
 
 function closeBlock(block) {
-  const out = { index: block.index, kind: block.kind };
-  if (block.kind === "text") out.text = block.text;
-  else if (block.kind === "reasoning") out.text = block.text;
-  else if (block.kind === "tool-call") {
-    out.callId = block.callId ?? "";
-    out.name = block.name ?? "";
-    out.arguments = block.text;
+  switch (block.kind) {
+    case "text": return { type: "text", text: block.text };
+    case "reasoning": return { type: "reasoning", text: block.text };
+    case "tool-call": return {
+      type: "tool-call",
+      id: CallId(block.callId ?? ""),
+      name: block.name ?? "",
+      arguments: block.text,
+    };
+    default: return { type: block.kind, text: block.text };
   }
-  return out;
 }
 
 async function* translate(payloads) {
@@ -189,17 +206,42 @@ async function* translate(payloads) {
     order.push(block);
     return block;
   };
-  for await (const payload of payloads) {
+  // Some gateways never send [DONE] and keep the connection open after the
+  // finish_reason; after finish we wait a short grace for trailing usage /
+  // [DONE] and then finalize normally instead of hanging forever.
+  const iterator = payloads[Symbol.asyncIterator]();
+  const grace = (ms) => new Promise((r) => setTimeout(r, ms));
+  const finalize = function* (reason) {
+    for (const block of order) yield { type: "block-end", index: block.index, block: closeBlock(block) };
+    if (pendingUsage) yield { type: "usage", usage: pendingUsage };
+    yield {
+      type: "finish",
+      reason: reason.kind === "stop" && order.length === 0
+        ? { kind: "error", failure: { message: "model returned a completed response with no content", code: EMPTY_RESPONSE_CODE } }
+        : reason,
+    };
+  };
+  while (true) {
+    let result;
+    // The gateway may omit [DONE] AND finish_reason entirely (some CRS
+    // backends end with a bare usage chunk and keep the connection open).
+    // Once we have a finish signal (finish_reason or usage), race a short
+    // grace against the next payload and finalize if nothing arrives.
+    if (pendingFinish || pendingUsage) {
+      result = await Promise.race([
+        iterator.next(),
+        grace(2500).then(() => ({ value: "[DONE]", done: false, fromTimeout: true })),
+      ]);
+    } else {
+      result = await iterator.next();
+    }
+    if (result.done) {
+      yield* finalize(pendingFinish ?? { kind: "stop" });
+      return;
+    }
+    const payload = result.value;
     if (payload === "[DONE]") {
-      for (const block of order) yield { type: "block-end", index: block.index, block: closeBlock(block) };
-      if (pendingUsage) yield { type: "usage", usage: pendingUsage };
-      const reason = pendingFinish ?? { kind: "stop" };
-      yield {
-        type: "finish",
-        reason: reason.kind === "stop" && order.length === 0
-          ? { kind: "error", failure: { message: "model returned a completed response with no content", code: EMPTY_RESPONSE_CODE } }
-          : reason,
-      };
+      yield* finalize(pendingFinish ?? { kind: "stop" });
       return;
     }
     let chunk;
@@ -252,6 +294,11 @@ async function* translate(payloads) {
         pendingFinish = mapFinishReason(choice.finish_reason);
       }
     }
+    if ((pendingFinish || pendingUsage) && result.fromTimeout) {
+      // grace expired without [DONE]: finalize now
+      yield* finalize(pendingFinish ?? { kind: "stop" });
+      return;
+    }
   }
 }
 
@@ -264,12 +311,11 @@ function requestId(headers) {
 }
 
 function providerRetryAfterMs(header) {
+  if (!header) return undefined;
   const secs = Number(header);
-  if (Number.isFinite(secs)) return Math.max(0, secs * 1000);
-  if (header) {
-    const d = new Date(header).getTime();
-    if (Number.isFinite(d)) return Math.max(0, d - Date.now());
-  }
+  if (Number.isFinite(secs) && secs > 0) return secs * 1000;
+  const d = new Date(header).getTime();
+  if (Number.isFinite(d)) return Math.max(0, d - Date.now()) || undefined;
   return undefined;
 }
 
@@ -344,7 +390,12 @@ export class OpenAICompatAdapter extends LlmAdapter {
     const conn = this.connections.get(provider);
     if (!conn) throw new LlmError(`unknown provider route: ${provider}`, "INVALID_REQUEST");
     const apiKey = await resolveApiKey(conn, this.credentialsResolver);
-    const body = serializeRequest(options, conn.defaults ?? {});
+    // Provider-configured system-prompt augmentation (e.g. tell the model
+    // about the sandbox mode so it stops requesting escalations).
+    const system = conn.extraSystem
+      ? `${options.system ?? ""}\n\n[environment]\n${conn.extraSystem}`
+      : options.system;
+    const body = serializeRequest({ ...options, system }, conn.defaults ?? {}, conn.stripToolFields);
     const headers = {
       authorization: `Bearer ${apiKey}`,
       "content-type": "application/json",
@@ -352,29 +403,52 @@ export class OpenAICompatAdapter extends LlmAdapter {
       ...attributionHeaders(),
       ...(conn.extraHeaders ?? {}),
     };
+    // Some gateways (the CRS OpenAI-compatible gateway) route requests to a
+    // backend that rejects the model ~50% of the time with a 400 whose detail
+    // mentions "Codex". This is transient — the same body succeeds on the
+    // other backend — so retry that specific failure a few times.
+    const transient400 = /not supported when using Codex/i;
     let response;
-    try {
-      response = await fetch(`${conn.baseURL.replace(/\/$/, "")}/chat/completions`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-        signal: options.signal,
-      });
-    } catch (error) {
-      if (options.signal?.aborted) throw error;
-      throw new LlmError(`provider ${provider} request to ${conn.baseURL} failed`, "TRANSPORT", { cause: error });
+    let lastError;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 800 * attempt));
+      try {
+        response = await fetch(`${conn.baseURL.replace(/\/$/, "")}/chat/completions`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+          signal: options.signal,
+        });
+      } catch (error) {
+        if (options.signal?.aborted) throw error;
+        lastError = new LlmError(`provider ${provider} request to ${conn.baseURL} failed`, "TRANSPORT", { cause: error });
+        continue;
+      }
+      if (!response.ok) {
+        let message = `provider ${provider} error (HTTP ${response.status})`;
+        let providerError;
+        try {
+          const errBody = await response.json();
+          providerError = errBody?.error ?? errBody;
+          if (providerError?.message) message = providerError.message;
+          else if (providerError?.detail) message = String(providerError.detail);
+        } catch { /* non-JSON error body */ }
+        if (response.status === 400 && transient400.test(message)) {
+          lastError = new LlmError(message, "TRANSPORT", { status: 400 });
+          continue; // transient gateway routing: retry
+        }
+        const delay = providerRetryAfterMs(response.headers.get("retry-after"));
+        const id = requestId(response.headers);
+        throw new LlmError(message, httpErrorCode(response.status, providerError), {
+          status: response.status,
+          ...(delay === undefined ? {} : { providerRetryAfterMs: delay }),
+          ...(id === undefined ? {} : { requestId: id }),
+        });
+      }
+      break;
     }
-    if (!response.ok) {
-      let message = `provider ${provider} error (HTTP ${response.status})`;
-      let providerError;
-      try { providerError = (await response.json()).error; if (providerError?.message) message = providerError.message; } catch { /* ignore */ }
-      const delay = providerRetryAfterMs(response.headers.get("retry-after"));
-      const id = requestId(response.headers);
-      throw new LlmError(message, httpErrorCode(response.status, providerError), {
-        status: response.status,
-        ...(delay === undefined ? {} : { providerRetryAfterMs: delay }),
-        ...(id === undefined ? {} : { requestId: id }),
-      });
+    if (!response?.ok) {
+      throw lastError ?? new LlmError(`provider ${provider} request failed after retries`, "TRANSPORT");
     }
     if (!response.body) throw new LlmError("provider returned no response body", "EMPTY_RESPONSE");
     yield* translate(parseSse(response.body));
@@ -392,7 +466,7 @@ export async function resolveApiKey(conn, credentialsResolver) {
     return assertUsableApiKey(process.env[ref], "dsh-tui-providers", ref);
   }
   throw new LlmError(
-    `dsh-tui-providers: no API key for provider route; store ${ref} in ~/.dsh/.credentials.yaml or export ${ref} in the environment`,
+    `dsh-tui-providers: no API key for provider route; store ${ref} in ~/.dsh/.credentials.yaml or export ${ref} in the environment (resolver=${credentialsResolver ? "present" : "MISSING"}, env=${typeof process !== "undefined" && process.env?.[ref] ? "present" : "absent"})`,
     "MISSING_CREDENTIAL"
   );
 }

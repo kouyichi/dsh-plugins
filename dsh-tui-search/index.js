@@ -11,6 +11,51 @@
 export const name = "dsh-tui-search";
 export const inject = ["tuiExtensions"];
 
+/**
+ * Direct SQLite fallback for /search. The sessionQuery service reconciles
+ * the whole corpus on every search and throws "persistence observation did
+ * not stabilize" while large/active sessions keep changing (multi-process
+ * or heavy testing sessions make it permanent). A read-only MATCH against
+ * the same FTS index answers instantly and covers every persisted session.
+ */
+async function sqliteSearch(q, limit) {
+  const { DatabaseSync } = await import("node:sqlite");
+  const home = process.env.DSH_HOME ?? `${process.env.HOME ?? "/root"}/.dsh`;
+  const path = `${home}/storages/session-search.db`;
+  const db = new DatabaseSync(path, { readOnly: true });
+  try {
+    const expr = `"${String(q).replaceAll('"', '""')}"`;
+    const rows = db
+      .prepare(
+        `SELECT pd.session_id AS session_id, ps.cwd AS cwd,
+                ps.created_at AS created_at,
+                highlight(persisted_docs, 0, '⟦', '⟧') AS marked_text
+         FROM persisted_docs AS pd
+         JOIN persisted_sessions AS ps ON ps.id = pd.session_id
+         WHERE persisted_docs MATCH ?
+         ORDER BY ps.created_at DESC
+         LIMIT ?`
+      )
+      .all(expr, Math.min(limit ?? 10, 50));
+    const seen = new Set();
+    const hits = [];
+    for (const row of rows) {
+      if (seen.has(row.session_id)) continue;
+      seen.add(row.session_id);
+      const snippet = String(row.marked_text ?? "").replace(/\s+/g, " ").trim();
+      hits.push({
+        id: row.session_id,
+        title: row.session_id,
+        cwd: row.cwd ?? undefined,
+        snippet: snippet.slice(0, 120),
+      });
+    }
+    return hits;
+  } finally {
+    try { db.close(); } catch { /* ignore */ }
+  }
+}
+
 export function apply(ctx) {
   const ext = ctx.get("tuiExtensions");
   if (!ext) {
@@ -47,8 +92,24 @@ export function apply(ctx) {
         return { lines: ["session search 不可用（profile 未挂 session-query-sqlite）"] };
       }
       try {
-        const page = await sq.searchSessions({ query: q, limit: 10 });
-        const hits = page.hits ?? [];
+        // Race the service against a short stall timer: its reconcile can
+        // take minutes (or fail to stabilize) with large/active sessions.
+        let hits;
+        try {
+          const page = await Promise.race([
+            sq.searchSessions({ query: q, limit: 10 }),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("索引仍在构建，请稍候重试")), 8000)
+            ),
+          ]);
+          // The sessionQuery service pages as { items, nextCursor? } — reading
+          // page.hits returned [] forever and made /search claim "no hits".
+          hits = page.items ?? page.hits ?? [];
+        } catch {
+          // Service unavailable/stalled → read-only direct query on the same
+          // FTS index. Instant, no reconcile, covers all persisted sessions.
+          hits = await sqliteSearch(q, 10);
+        }
         if (hits.length === 0) return { lines: [`「${q}」无命中。首次搜索会建索引，可能较慢；重试即可。`] };
         const lines = [`「${q}」命中 ${hits.length} 个会话（enter 查看恢复命令）`, ""];
         hits.forEach((h, i) => {
@@ -67,11 +128,23 @@ export function apply(ctx) {
       const m = line?.match(/^\[(\d+)\]\s+(.+)$/);
       if (!m) return;
       ctl.closeExtPanel();
-      const sq = ctx.get("sessionQuery");
-      if (!sq?.searchSessions) return;
-      sq.searchSessions({ query: lastQuery, limit: 10 }).then((page) => {
-        const hit = (page.hits ?? [])[parseInt(m[1], 10) - 1];
-        ctl.notice("info", hit ? `继续该会话: dsh --profile tui --resume ${hit.id}` : "（命中已失效，重新 /search）");
+      const idx = parseInt(m[1], 10) - 1;
+      const hit = async () => {
+        const sq = ctx.get("sessionQuery");
+        try {
+          if (sq?.searchSessions) {
+            const page = await sq.searchSessions({ query: lastQuery, limit: 10 });
+            return (page.items ?? page.hits ?? [])[idx];
+          }
+        } catch { /* fall through to direct query */ }
+        try {
+          return (await sqliteSearch(lastQuery, 10))[idx];
+        } catch {
+          return undefined;
+        }
+      };
+      hit().then((h) => {
+        ctl.notice("info", h ? `继续该会话: dsh --profile tui --resume ${h.id}` : "（命中已失效，重新 /search）");
       }).catch(() => {});
     },
   }));

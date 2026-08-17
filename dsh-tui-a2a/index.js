@@ -134,7 +134,7 @@ export function apply(ctx) {
       const q = String(buffer).slice(1).toLowerCase();
       return Object.keys(A2A_AGENTS)
         .filter((n) => n.startsWith(q))
-        .map((n) => `@${n} `);
+        .map((n) => `@${n}`);
     },
   }));
 

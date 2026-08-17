@@ -93,7 +93,10 @@ export function apply(ctx) {
       return { lines };
     },
     confirm(line, ctl) {
-      const m = line?.match(/^[👤🤖] \[(\d+)\]/);
+      // `u` flag is mandatory: without it the character class [👤🤖] matches
+      // one UTF-16 surrogate and the following ` \[` can never line up,
+      // silently disabling Enter on every hit.
+      const m = line?.match(/^[👤🤖] \[(\d+)\]/u);
       if (!m) return;
       const idx = parseInt(m[1], 10);
       const msg = messages[idx];

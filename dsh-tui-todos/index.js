@@ -73,7 +73,12 @@ export function apply(ctx) {
       return { lines };
     },
     confirm(line, ctl) {
-      const item = line?.replace(/^[○◐✓?] /, "").trim();
+      // Only real todo rows carry a status glyph; the header/summary rows
+      // ("共 N 项…", "提示: …") must NOT be forwarded to the agent — the
+      // default selection sits on the header, and submitting it asked the
+      // agent to "mark 共 N 项… as done".
+      if (!/^[○◐✓?] /.test(line ?? "")) return;
+      const item = line.replace(/^[○◐✓?] /, "").trim();
       if (!item) return;
       ctl.closeExtPanel();
       ctl.notice("info", `已请求更新待办: ${item}`);

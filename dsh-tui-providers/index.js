@@ -101,8 +101,10 @@ function toConnection(p) {
     models: Array.isArray(p.models) ? p.models.map((m) => (typeof m === "string" ? { id: m, name: m } : m)) : [],
     defaultContextWindow: p.defaultContextWindow ?? 128000,
     maxTokens: p.maxTokens,
-    defaults: { thinking: p.thinking ?? "enabled", reasoningEffort: p.reasoningEffort ?? "high" },
+    defaults: { thinking: p.thinking, reasoningEffort: p.reasoningEffort },
     extraHeaders: p.extraHeaders,
+    extraSystem: p.extraSystem,
+    stripToolFields: Array.isArray(p.stripToolFields) ? p.stripToolFields : undefined,
   };
 }
 
@@ -142,13 +144,21 @@ export function apply(ctx) {
   for (const p of cfg.providers) connections.set(p.name, toConnection(p));
 
   const adapter = new OpenAICompatAdapter(connections);
-  adapter.credentialsResolver = ctx.get("credentials");
+  // Lazy credential resolution: ctx.get() during apply() may run before the
+  // credentials-local entry activates (returns undefined). Resolve per call.
+  adapter.credentialsResolver = {
+    resolve: async (ref) => ctx.get("credentials")?.resolve(ref),
+  };
+  // deepseek-official is already owned by @deepseek-ai/dsh-llm-deepseek;
+  // registering it again would throw "already registered" and kill the whole
+  // batch. Our brick owns only the EXTRA provider routes.
+  const ownedRoutes = () => [...connections.keys()].filter((n) => n !== "deepseek-official");
   let registration;
   try {
     const llm = ctx.get("llm");
     if (llm?.registerAdapter) {
-      registration = llm.registerAdapter([...connections.keys()], adapter);
-      ctx.logger.info(`[dsh-tui-providers] registered ${connections.size} provider routes: ${[...connections.keys()].join(", ")}`);
+      registration = llm.registerAdapter(ownedRoutes(), adapter);
+      ctx.logger.info(`[dsh-tui-providers] registered ${ownedRoutes().length} extra provider routes: ${ownedRoutes().join(", ")}`);
     } else {
       ctx.logger.warn("[dsh-tui-providers] llm.registerAdapter unavailable — providers registered but inert");
     }
@@ -179,12 +189,19 @@ export function apply(ctx) {
       lines.push("");
       lines.push(`配置: ${CONFIG_PATH}`);
       lines.push("");
+      // credential resolution diagnostics (quick self-check for each route)
+      const cred = ctx.get("credentials");
       for (const p of cfg.providers) {
+        let credState = "?";
+        try {
+          const hit = cred ? await cred.resolve(p.apiKeyEnv || "API_KEY") : undefined;
+          credState = hit ? `key ✓(${String(hit.value).slice(0, 4)}…)` : "key ✗未找到";
+        } catch (e) { credState = `key ✗${e.message?.slice(0, 30)}`; }
         const conn = toConnection(p);
         const mark = p.name === current ? "▶" : " ";
         const status = await probeProvider(ctx, conn);
         lines.push(`${mark} ${p.displayName} (${p.name})`);
-        lines.push(`   ${conn.baseURL} · key: ${conn.apiKeyEnv} · ${status}`);
+        lines.push(`   ${conn.baseURL} · ${credState} · ${status}`);
       }
       lines.push("");
       lines.push("提示: /provider <名> 切换；/provider add <名> <baseURL> <apiKeyEnv> [模型...] 添加；编辑 JSON 后重启生效");
@@ -215,8 +232,8 @@ export function apply(ctx) {
         cfg.providers.push({ name, displayName: name, baseURL, apiKeyEnv, models });
         saveConfig(cfg);
         connections.set(name, toConnection(cfg.providers.at(-1)));
-        try { registration?.replace([...connections.keys()]); } catch { /* ignore */ }
-        ctl.notice("success", `已添加 provider ${name}（${baseURL}）。/provider ${name} 切换；也可继续 /provider add`);
+        try { registration?.replace(ownedRoutes()); } catch (e) { ctx.logger.warn(`[dsh-tui-providers] hot re-register failed: ${e.message}`); }
+        ctl.notice("success", `已添加 provider ${name}（${baseURL}）。/provider ${name} 切换；若 /model 未列出新模型请重启 TUI`);
         return;
       }
       if (cmd === "remove") {
@@ -226,7 +243,7 @@ export function apply(ctx) {
         cfg.providers = cfg.providers.filter((p) => p.name !== name);
         saveConfig(cfg);
         connections.delete(name);
-        try { registration?.replace([...connections.keys()]); } catch { /* ignore */ }
+        try { registration?.replace(ownedRoutes()); } catch (e) { ctx.logger.warn(`[dsh-tui-providers] hot re-register failed: ${e.message}`); }
         ctl.notice("success", `已移除 provider ${name}`);
         return;
       }

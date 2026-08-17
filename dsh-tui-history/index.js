@@ -102,7 +102,9 @@ export function apply(ctx) {
       return { lines };
     },
     confirm(line, ctl) {
-      const m = line?.match(/^\[(\d+)\]\s+(\d\d:\d\d:\d\d)\s+([\s\S]*)$/);
+      // Tolerate the panel's leading spaces and padStart-ed index ("[ 1]"):
+      // the strict ^\[(\d+)\] never matched, so Enter silently did nothing.
+      const m = line?.match(/^\s*\[\s*(\d+)\]\s+(\d\d:\d\d:\d\d)\s+([\s\S]*)$/);
       if (!m) return;
       const idx = parseInt(m[1], 10) - 1;
       const h = history[idx];
