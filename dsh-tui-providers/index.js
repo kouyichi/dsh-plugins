@@ -175,9 +175,14 @@ function ensureConfig() {
   }
   // Migrate existing configs: fold in new default fields (efforts,
   // stripToolFields, extraSystem, defaultContextWindow) for known providers
-  // while keeping the user's baseURL/keyEnv/models.
+  // while keeping the user's baseURL/keyEnv/models; append prebuilt
+  // providers the user doesn't have yet.
   const byName = new Map(DEFAULT_PROVIDERS.map((p) => [p.name, p]));
   let changed = false;
+  const existing = new Set(cfg.providers.map((p) => p.name));
+  for (const def of DEFAULT_PROVIDERS) {
+    if (!existing.has(def.name)) { cfg.providers.push(def); changed = true; }
+  }
   for (const p of cfg.providers) {
     const def = byName.get(p.name);
     if (!def) continue;
