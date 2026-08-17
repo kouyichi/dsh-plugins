@@ -9,7 +9,7 @@ PLUGINS_DIR="$DSH_HOME/plugins"
 # 家级插件（全部 profile 生效）
 PLUGINS="dsh-learn dsh-profile dsh-dream dsh-tower dsh-kanban dsh-scaffold dsh-guard dsh-xray dsh-cron dsh-bench dsh-pack dsh-a2a dsh-meter"
 # TUI 积木（只挂 tui profile —— cordis inject 是硬依赖，砖的 tuiExtensions 服务只存在于 TUI；bridge 必须排第一）
-TUI_BRICKS="dsh-tui-bridge dsh-tui-compact dsh-tui-usage dsh-tui-context dsh-tui-export dsh-tui-theme dsh-tui-todos dsh-tui-history dsh-tui-keymap dsh-tui-commands dsh-tui-btw dsh-tui-update dsh-tui-goals dsh-tui-find dsh-tui-a2a dsh-tui-search dsh-tui-trajectory dsh-tui-feedback"
+TUI_BRICKS="dsh-tui-bridge dsh-tui-compact dsh-tui-usage dsh-tui-context dsh-tui-export dsh-tui-theme dsh-tui-todos dsh-tui-history dsh-tui-keymap dsh-tui-commands dsh-tui-btw dsh-tui-update dsh-tui-goals dsh-tui-find dsh-tui-a2a dsh-tui-search dsh-tui-trajectory dsh-tui-feedback dsh-tui-providers"
 
 echo "==> 1. 确认插件目录存在"
 for p in $PLUGINS; do

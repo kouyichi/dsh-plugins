@@ -1,0 +1,8 @@
+{
+  "name": "dsh-tui-providers",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "TUI brick: multi-provider LLM adapter — register any OpenAI-compatible endpoint (DeepSeek/OpenRouter/Ollama/... ) as dsh provider routes, switch via /provider, inspect via /providers panel (Hermes ProviderProfile pattern)."
+}
