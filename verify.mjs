@@ -71,8 +71,10 @@ for (const p of plugins) {
     if (typeof mod.name !== "string" || !mod.name) problems.push("missing name export");
     if (!Array.isArray(mod.inject)) problems.push("inject must be an array");
     // bricks may inject only tuiExtensions; classic plugins must include tools;
-    // a pure provider (dsh-tui-bridge) may inject nothing at all
-    else if (mod.inject.length > 0 && !mod.inject.includes("tuiExtensions") && !mod.inject.includes("tools")) {
+    // a pure provider (dsh-tui-bridge) may inject nothing at all;
+    // app plugins (profile startup/runner, e.g. dsh-tui-headless-app) inject
+    // their own startup service (name contains "startup")
+    else if (mod.inject.length > 0 && !mod.inject.includes("tuiExtensions") && !mod.inject.includes("tools") && !mod.inject.some((s) => /startup/i.test(s))) {
       problems.push("inject must include 'tools' (classic), 'tuiExtensions' (TUI brick), or be empty (pure provider)");
     }
     if (typeof mod.apply !== "function") problems.push("missing apply export");

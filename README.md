@@ -1,11 +1,11 @@
 # dsh-plugins — DeepSeek Harness 插件全家桶
 
-> **31 个插件 · 80+ 工具 · 零构建 · 全实测** — 把 dsh 从"框架"变成"能干活的 agent 工作站"。
+> **33 个插件 · 80+ 工具 · 零构建 · 全实测** — 把 dsh 从"框架"变成"能干活的 agent 工作站"。
 > 每个插件都是独立积木：按需拼装，不想要就拆掉，**绝不做巨无霸**。
 
 [![MIT](https://img.shields.io/badge/license-MIT-263146?style=flat-square)](LICENSE)
 ![dsh](https://img.shields.io/badge/dsh-0.1.0--rc.6-4D6BFE?style=flat-square)
-![plugins](https://img.shields.io/badge/plugins-31-4D6BFE?style=flat-square)
+![plugins](https://img.shields.io/badge/plugins-33-4D6BFE?style=flat-square)
 ![tools](https://img.shields.io/badge/tools-80%2B-4D6BFE?style=flat-square)
 
 ---
@@ -42,7 +42,7 @@
 | `dsh-a2a` | **原生 A2A v1.0 服务端**：tasks/send\|get\|cancel\|list + AgentCard | curl 端到端 completed |
 | `dsh-meter` | Token 用量/成本：命中率、估算成本、周报 | 85.9% 命中率实测 |
 
-### 二、TUI 积木（18 个，只挂 tui profile，经扩展接缝）
+### 二、TUI 积木（19 个，只挂 tui profile，经扩展接缝）
 
 > 接缝由 `dsh-tui-bridge` 提供（零依赖纯 provider），TUI 核心只消费。命令/面板/状态栏字段/主题/输入钩子全部可插拔。
 
@@ -86,9 +86,18 @@ dsh --profile tui                # TUI + 18 积木：/usage /context /theme /tod
 
 ```text
 ~/.dsh/cordis.patch.yml          ← 家级 patch：13 个能力插件（所有 profile）
-~/.dsh/profiles/tui/cordis.patch.yml  ← tui patch：18 个积木（只 TUI）
+~/.dsh/profiles/tui/cordis.patch.yml  ← tui patch：19 个积木（只 TUI）
 ~/.dsh/plugins/<name> → 符号链接 → 本仓库/<name>
 ```
+
+### 三、App 插件（profile 启动器，1 个）
+
+| 插件 | 功能 | 实测 |
+|---|---|---|
+| `dsh-tui-headless-app` | **tui-headless profile**：一次任务驱动保留 tui 功能面——`--mode`（preset）/`--model`/`--provider`/`--effort`/`--goal`（创建并武装目标）/`--permission`/`--resume`/`--json` | 全 flags 实跑：goal 自动执行完毕、resume 同会话续跑 |
+
+用法：`dsh --profile tui-headless --mode code --model deepseek-v4-pro --goal "目标" --json "任务"`；
+profile 配置在 `~/.dsh/profiles/tui-headless/`（startup 解析 flags → runner 驱动 agent，均为此插件）。
 
 - **为什么能力插件挂家级**：它们只依赖 dsh base 服务（tools/subagents/agents），任何 profile 都能用。
 - **为什么积木只挂 tui**：cordis 的 `inject` 是硬依赖——积木依赖 `tuiExtensions` 服务（仅 TUI 存在），挂到别的 profile 会阻塞激活。接缝本身是独立砖（`dsh-tui-bridge`，零依赖），保证激活图无环。
@@ -97,7 +106,7 @@ dsh --profile tui                # TUI + 18 积木：/usage /context /theme /tod
 ## 🧪 验证
 
 ```bash
-npm test                # node verify.mjs：31 插件契约检查（tools/砖注册表/服务 provide）
+npm test                # node verify.mjs：33 插件契约检查（tools/砖注册表/服务 provide）
 node verify.mjs dsh-guard   # 单插件
 ```
 

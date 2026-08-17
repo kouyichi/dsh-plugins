@@ -1,0 +1,15 @@
+{
+  "name": "dsh-tui-headless-app",
+  "version": "0.1.0",
+  "description": "tui-headless profile app: one-shot task with tui feature set (mode/model/goal/permission/resume/json)",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./startup": "./startup.js"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-agent": "*",
+    "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/dsh-session": "*"
+  }
+}
