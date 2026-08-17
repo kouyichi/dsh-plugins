@@ -34,14 +34,23 @@ export function apply(ctx) {
 
   // Resolve the model's context window lazily (moved out of the TUI core:
   // this is brick business, not core business).
+  // 真实窗口优先走 resolveModelInfo（adapter 的 configured.contextWindow ??
+  // defaultContextWindow）——listModels 的 modelInfo() 不返回 contextWindow，
+  // 只有 resolveModel 链路带。解析成功同步到 store.ctxWindow，状态栏 ctx% 跟随。
   (async () => {
     try {
       const llm = ctx.get("llm");
       const sel = ctx.get("agentDefaultModel")?.currentSelection?.();
-      if (llm?.listModels && sel?.provider && sel?.model) {
-        const models = await llm.listModels(sel.provider);
-        const cur = models.find((m) => m.id === sel.model);
-        if (cur?.contextWindow) ctxWindow = Number(cur.contextWindow);
+      if (llm?.resolveModelInfo && sel?.provider && sel?.model) {
+        const info = await llm.resolveModelInfo(sel.provider, sel.model);
+        if (info?.context?.contextWindow) {
+          ctxWindow = Number(info.context.contextWindow);
+        } else {
+          const models = await llm.listModels(sel.provider);
+          const cur = models.find((m) => m.id === sel.model);
+          if (cur?.contextWindow) ctxWindow = Number(cur.contextWindow);
+        }
+        if (ctxWindow) store.set({ ctxWindow });
       }
     } catch { /* non-fatal: falls back to 128k */ }
   })();
