@@ -446,6 +446,8 @@ export function apply(ctx) {
           }
           // apply immediately to the running agent (mutable selection snapshot)
           ctl.updateSelection({ provider: target.name, model, reasoningEffort: "high" });
+          // keep status bar / splash in sync (core /model does this too)
+          store.set({ meta: { ...store.get().meta, model, provider: target.name } });
           ctl.notice("success", `已切换 provider → ${target.name}（${model}）。立即生效；/model 可换模型与力度`);
         } catch (e) {
           ctl.notice("error", `切换失败: ${e.message}`);
