@@ -71,7 +71,7 @@ async function run(ctx, opts, io) {
   const agents = ctx.get("agents");
   const defaultModel = ctx.get("agentDefaultModel");
   const sessions = ctx.get("sessions");
-  if (agents === void 0 || defaultModel === void 0 || sessions === void 0) return;
+  if (agents == null || defaultModel == null || sessions == null) return;
 
   const selection = defaultModel.currentSelection();
   const provider = opts.provider ?? selection.provider;
