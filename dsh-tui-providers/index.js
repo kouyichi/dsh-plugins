@@ -324,17 +324,21 @@ export function apply(ctx) {
         ctl.notice("error", "无法读取当前模型选择");
         return;
       }
+      // Use the LIVE provider from the status-bar meta (currentSelection()
+      // reflects the persisted default, which lags behind /provider switches).
+      const liveProvider = store.meta?.provider;
+      const effProvider = (liveProvider && cfg.providers.some((p) => p.name === liveProvider)) ? liveProvider : sel.provider;
       // 校验当前模型是否支持该力度（预置表）
-      const conn = toConnection(cfg.providers.find((p) => p.name === sel.provider) ?? {});
+      const conn = toConnection(cfg.providers.find((p) => p.name === effProvider) ?? {});
       const supported = conn.efforts ?? known;
       if (!supported.includes(arg)) {
-        ctl.notice("warning", `${sel.provider} 的模型力度集合为 ${supported.join("/")}，不支持 ${arg}；用 /model 选模型后 e 遍历`);
+        ctl.notice("warning", `${effProvider} 的模型力度集合为 ${supported.join("/")}，不支持 ${arg}；用 /model 选模型后 e 遍历`);
         return;
       }
       (async () => {
         try {
           const m = ctx.get("agentDefaultModel");
-          await m.saveSelection({ provider: sel.provider, model: sel.model, reasoningEffort: arg });
+          await m.saveSelection({ provider: effProvider, model: sel.model, reasoningEffort: arg });
           ctl.updateSelection({ reasoningEffort: arg });
           ctl.notice("success", `推理力度 → ${arg}（立即生效）`);
         } catch (e) {
@@ -365,7 +369,7 @@ export function apply(ctx) {
       lines.push("");
       // credential resolution diagnostics (quick self-check for each route)
       const cred = ctx.get("credentials");
-      for (const p of cfg.providers) {
+      const rows = await Promise.all(cfg.providers.map(async (p) => {
         let credState = "?";
         try {
           const hit = cred ? await cred.resolve(p.apiKeyEnv || "API_KEY") : undefined;
@@ -374,9 +378,9 @@ export function apply(ctx) {
         const conn = toConnection(p);
         const mark = p.name === current ? "▶" : " ";
         const status = await probeProvider(ctx, conn, p);
-        lines.push(`${mark} ${p.displayName} (${p.name})`);
-        lines.push(`   ${conn.baseURL} · ${credState} · ${status}`);
-      }
+        return [`${mark} ${p.displayName} (${p.name})`, `   ${conn.baseURL} · ${credState} · ${status}`];
+      }));
+      for (const r of rows) lines.push(...r);
       lines.push("");
       lines.push("提示: /provider <名> 切换；/provider add <名> <baseURL> <apiKeyEnv> [模型...] 添加；编辑 JSON 后重启生效");
       return { lines };
@@ -414,6 +418,10 @@ export function apply(ctx) {
         const name = args[1];
         if (!name) { ctl.notice("warning", "用法: /provider remove <名>"); return; }
         if (name === currentProvider(store)) { ctl.notice("warning", "不能移除当前使用的 provider，先切到别的"); return; }
+        if (!cfg.providers.some((p) => p.name === name)) {
+          ctl.notice("warning", `未知 provider: ${name}（/provider list 查看）`);
+          return;
+        }
         cfg.providers = cfg.providers.filter((p) => p.name !== name);
         saveConfig(cfg);
         connections.delete(name);

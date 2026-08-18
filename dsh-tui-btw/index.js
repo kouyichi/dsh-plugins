@@ -30,7 +30,8 @@ export function apply(ctx) {
         return;
       }
       try {
-        await ctl.newTab();
+        const opened = await ctl.newTab();
+        if (!opened) return; // busy / rejected — newTab already noticed
         // give the new tab's agent a beat to settle, then submit
         setTimeout(() => ctl.submit(q), 300);
         ctl.notice("info", `侧会话已开启: ${q.slice(0, 60)}（PgUp/PgDn 切回主线）`);

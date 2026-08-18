@@ -49,8 +49,22 @@ export function apply(ctx) {
       if (events.length === 0) {
         return { lines: ["当前会话还没有事件。", "", "提示: 发消息后本面板显示完整轨迹（含工具调用与思考）"] };
       }
-      const lines = [`当前会话 ${events.length} 条事件（enter 看详情）`, ""];
-      events.slice(-40).forEach((ev, i) => {
+      // Collapse the token-level assistant-delta stream into message-level
+      // entries so the trajectory reads as steps, not text fragments.
+      const collapsed = [];
+      let buf = null;
+      for (const ev of events) {
+        if (ev.kind === "assistant-delta") {
+          if (!buf) { buf = { text: "", reasoning: "" }; collapsed.push(buf); }
+          if (ev.text) buf.text += ev.text;
+          if (ev.reasoning) buf.reasoning += ev.reasoning;
+        } else {
+          buf = null;
+          collapsed.push(ev);
+        }
+      }
+      const lines = [`当前会话 ${collapsed.length} 条事件（enter 看详情）`, ""];
+      collapsed.slice(-40).forEach((ev, i) => {
         lines.push(`[${String(i + 1).padStart(3, " ")}] ${summarize(ev)}`);
       });
       return { lines };
@@ -60,7 +74,20 @@ export function apply(ctx) {
       if (!m) return;
       const idx = parseInt(m[1], 10) - 1;
       const events = store.events ?? [];
-      const ev = events.slice(-40)[idx];
+      // Re-collapse for the same index space shown in load().
+      const collapsed = [];
+      let buf = null;
+      for (const ev of events) {
+        if (ev.kind === "assistant-delta") {
+          if (!buf) { buf = { text: "", reasoning: "" }; collapsed.push(buf); }
+          if (ev.text) buf.text += ev.text;
+          if (ev.reasoning) buf.reasoning += ev.reasoning;
+        } else {
+          buf = null;
+          collapsed.push(ev);
+        }
+      }
+      const ev = collapsed.slice(-40)[idx];
       if (!ev) return;
       const detail = ev.text ?? ev.reasoning ?? ev.args ?? ev.preview ?? JSON.stringify(ev).slice(0, 300);
       ctl.notice("info", `事件 ${idx + 1} 详情:\n${String(detail).slice(0, 1500)}`);

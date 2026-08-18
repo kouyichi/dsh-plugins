@@ -86,13 +86,15 @@ export function apply(ctx) {
       // window: brick-resolved model contextWindow, else 128k default.
       const win = ctxWindow || 128000;
       const pct = Math.min(1, used / win);
+      const overflow = used > win;
       lines.push(`模型窗口: ${(win / 1000).toFixed(0)}k tokens（${store.meta?.model ?? "?"}）`);
-      lines.push(`当前占用: ${(used / 1000).toFixed(1)}k tokens`);
+      lines.push(`当前占用: ${(used / 1000).toFixed(1)}k tokens${overflow ? "  ⚠ 超过窗口！" : ""}`);
       lines.push("");
       lines.push(`  [${bar(pct)}]  ${(pct * 100).toFixed(1)}%`);
       lines.push("");
       lines.push("分级建议：");
-      if (pct >= 0.9) lines.push("  ⚠ 超过 90%：强烈建议 /compact（有截断风险）");
+      if (overflow) lines.push("  ⚠ 已超过模型窗口：继续发送可能被截断或报错，请立即 /compact 或 /new");
+      else if (pct >= 0.9) lines.push("  ⚠ 超过 90%：强烈建议 /compact（有截断风险）");
       else if (pct >= 0.7) lines.push("  ⚠ 超过 70%：建议 /compact 或开新会话（/new）");
       else if (pct >= 0.5) lines.push("  ◐ 超过 50%：留意增长，长任务可考虑规划压缩点");
       else lines.push("  ✓ 占用健康，无需处理");

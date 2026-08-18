@@ -70,9 +70,10 @@ export function apply(ctx) {
         }
         const after = store.get().stats?.totalTokens ?? 0;
         const saved = Math.max(0, before - after);
+        const shadowed = (result.shadowedTokenCount ?? 0) / 1000;
         ctl.notice(
           "success",
-          `已压缩 ${result.shadowedSeqs?.length ?? "?"} 条历史（~${(result.shadowedTokenCount ?? 0 / 1000).toFixed(1)}k tokens 被遮蔽）` +
+          `已压缩 ${result.shadowedSeqs?.length ?? "?"} 条历史（~${shadowed.toFixed(1)}k tokens 被遮蔽）` +
             (saved > 0 ? `，状态栏 token 从 ${(before / 1000).toFixed(1)}k → ${(after / 1000).toFixed(1)}k` : "")
         );
       } catch (err) {

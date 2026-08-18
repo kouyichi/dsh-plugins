@@ -22,7 +22,7 @@ export const A2A_AGENTS = {
 };
 
 const POLL_MS = 2000;
-const TOTAL_TIMEOUT_MS = 1900 * 1000;
+const TOTAL_TIMEOUT_MS = 300 * 1000; // 5 min — long enough for real tasks, short enough to notice a dead peer
 
 async function rpc(port, body) {
   const res = await fetch(`http://127.0.0.1:${port}/`, {
@@ -63,7 +63,9 @@ async function a2aSend(name, text) {
   const parts = task?.artifacts?.[0]?.parts ?? [];
   const textOut = parts.map((p) => p.text ?? "").join("") ||
     task?.status?.message?.parts?.map((p) => p.text ?? "").join("") ||
-    "(no result)";
+    (task?.status?.state === "TASK_STATE_FAILED"
+      ? `(task failed: ${task?.status?.message?.text ?? "no error detail"})`
+      : "(no result)");
   return { state: task.status?.state ?? "UNKNOWN", text: textOut, ms: Date.now() - t0 };
 }
 
@@ -102,11 +104,12 @@ export function apply(ctx) {
     id: "a2a",
     title: "A2A 端点 / agents",
     async load() {
-      const rows = [];
-      for (const name of Object.keys(A2A_AGENTS)) {
-        const probe = await a2aProbe(name);
-        rows.push(`  ${probe.ok ? "✓" : "✗"} @${name}  ${probe.detail}`);
-      }
+      const rows = await Promise.all(
+        Object.keys(A2A_AGENTS).map(async (name) => {
+          const probe = await a2aProbe(name);
+          return `  ${probe.ok ? "✓" : "✗"} @${name}  ${probe.detail}`;
+        })
+      );
       return { lines: [`本机 agent 网络（A2A v1.0）:`, "", ...rows, "", "提示: 输入 @hermes 任务 直接派活（Tab 补全 @agent 名）"] };
     },
   }));
