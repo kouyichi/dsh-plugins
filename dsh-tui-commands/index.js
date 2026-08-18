@@ -62,7 +62,10 @@ export function apply(ctx) {
     for (const f of readdirSync(COMMANDS_DIR)) {
       if (!f.endsWith(".md")) continue;
       const name = "/" + f.replace(/\.md$/, "").toLowerCase();
-      if (ext.commands.has(name)) continue; // built-in or earlier wins
+      if (ext.commands.has(name)) {
+        ctx.logger.warn(`[dsh-tui-commands] 自定义命令 ${name} 与内置/已注册命令重名，已忽略（${f}）`);
+        continue; // built-in or earlier wins
+      }
       try {
         const { desc, body } = parseCommandFile(join(COMMANDS_DIR, f));
         disposers.push(ext.registerCommand({

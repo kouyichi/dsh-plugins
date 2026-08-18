@@ -60,8 +60,10 @@ export function apply(ctx) {
         pending = t;
         ctl.notice("info", `已排队（空闲自动发送，Alt+Up 取回）: ${t.slice(0, 60)}`);
         if (!poller) {
+          let age = 0;
           poller = setInterval(() => {
             const s = store.get();
+            age += 500;
             if (pending && !s.input?.busy) {
               const p = pending;
               pending = null;
@@ -69,6 +71,12 @@ export function apply(ctx) {
               poller = null;
               ctl.notice("info", `↩ 发送排队消息: ${p.slice(0, 60)}`);
               ctl.submit(p);
+            } else if (pending && age >= 300000) {
+              // never let a queued message sit forever
+              pending = null;
+              clearInterval(poller);
+              poller = null;
+              ctl.notice("warning", "排队消息已取消（超过 5 分钟未发出）");
             }
           }, 500);
         }

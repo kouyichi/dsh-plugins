@@ -64,7 +64,7 @@ export function apply(ctx) {
         }
       }
       const lines = [`当前会话 ${collapsed.length} 条事件（enter 看详情）`, ""];
-      collapsed.slice(-40).forEach((ev, i) => {
+      collapsed.slice(-100).forEach((ev, i) => {
         lines.push(`[${String(i + 1).padStart(3, " ")}] ${summarize(ev)}`);
       });
       return { lines };
@@ -87,7 +87,7 @@ export function apply(ctx) {
           collapsed.push(ev);
         }
       }
-      const ev = collapsed.slice(-40)[idx];
+      const ev = collapsed.slice(-100)[idx];
       if (!ev) return;
       const detail = ev.text ?? ev.reasoning ?? ev.args ?? ev.preview ?? JSON.stringify(ev).slice(0, 300);
       ctl.notice("info", `事件 ${idx + 1} 详情:\n${String(detail).slice(0, 1500)}`);

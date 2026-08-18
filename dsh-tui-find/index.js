@@ -46,7 +46,7 @@ export function apply(ctx) {
     walk(event.data);
     const t = texts.map((s) => s.trim()).filter(Boolean).find((s) => !NOISE.some((n) => s.startsWith(n)));
     if (t) {
-      messages.push({ role, text: t.slice(0, 2000) });
+      messages.push({ role, text: t.slice(0, 4000) });
       if (messages.length > MAX_KEEP) messages.shift();
     }
   };
@@ -79,7 +79,10 @@ export function apply(ctx) {
         const idx = m.text.toLowerCase().indexOf(q);
         if (idx >= 0) {
           const start = Math.max(0, idx - 40);
-          const snippet = (start > 0 ? "…" : "") + m.text.slice(start, idx + q.length + 80) + "…";
+          const raw = m.text.slice(start, idx + q.length + 80);
+          // mark the query with ⟦⟧ like /search so hits are visually obvious
+          const marked = raw.replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"), "⟦$1⟧");
+          const snippet = (start > 0 ? "…" : "") + marked + "…";
           hits.push({ i, role: m.role, snippet });
         }
       });
@@ -87,7 +90,7 @@ export function apply(ctx) {
         return { lines: [`「${q}」在会话中无命中（已缓存最近 ${messages.length} 条消息）`, "", "提示: /search <词> 可跨会话全文搜索"] };
       }
       const lines = [`「${q}」命中 ${hits.length} 条（enter 重发该条继续追问）`, ""];
-      hits.slice(-30).forEach((h) => {
+      hits.slice(-50).forEach((h) => {
         lines.push(`${h.role === "user" ? "👤" : "🤖"} [${h.i}] ${h.snippet.replace(/\n/g, " ")}`);
       });
       return { lines };

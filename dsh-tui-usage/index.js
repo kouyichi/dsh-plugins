@@ -32,7 +32,7 @@ const costOf = (u, p) =>
   u.cacheRead / 1e6 * p.cache_read_per_mtok +
   u.output / 1e6 * p.output_per_mtok;
 
-const fmtUsd = (v) => `$${v.toFixed(4)}`;
+const fmtUsd = (v) => (v > 0 && v < 0.0001 ? "<$0.0001" : `$${v.toFixed(4)}`);
 
 const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd]);
 

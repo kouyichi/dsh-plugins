@@ -278,7 +278,7 @@ export function apply(ctx) {
   }
 
   function currentProvider(store) {
-    return store.meta?.provider ?? "?";
+    return store.meta?.provider ?? "unknown";
   }
 
   /* -------- model catalog (feeds the core /model picker) -------- */
@@ -330,7 +330,7 @@ export function apply(ctx) {
       const effProvider = (liveProvider && cfg.providers.some((p) => p.name === liveProvider)) ? liveProvider : sel.provider;
       // 校验当前模型是否支持该力度（预置表）
       const conn = toConnection(cfg.providers.find((p) => p.name === effProvider) ?? {});
-      const supported = conn.efforts ?? known;
+      const supported = conn.efforts ?? [];
       if (!supported.includes(arg)) {
         ctl.notice("warning", `${effProvider} 的模型力度集合为 ${supported.join("/")}，不支持 ${arg}；用 /model 选模型后 e 遍历`);
         return;
@@ -378,7 +378,10 @@ export function apply(ctx) {
         const conn = toConnection(p);
         const mark = p.name === current ? "▶" : " ";
         const status = await probeProvider(ctx, conn, p);
-        return [`${mark} ${p.displayName} (${p.name})`, `   ${conn.baseURL} · ${credState} · ${status}`];
+        // 404 on /models is common for gateways that only serve chat — annotate
+        // so the row doesn't read as "provider is broken".
+        const annotated = /HTTP 404/.test(status) ? `${status}（/models 探测不受支持，聊天仍可用）` : status;
+        return [`${mark} ${p.displayName} (${p.name})`, `   ${conn.baseURL} · ${credState} · ${annotated}`];
       }));
       for (const r of rows) lines.push(...r);
       lines.push("");

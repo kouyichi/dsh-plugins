@@ -45,7 +45,7 @@ export function apply(ctx) {
     walk(event.data);
     const t = texts.map((s) => s.trim()).filter(Boolean).find((s) => !NOISE.some((n) => s.startsWith(n)));
     if (t) {
-      history.push({ ts: Date.now(), text: t.slice(0, 1000) });
+      history.push({ ts: Date.now(), text: t.slice(0, 4000) });
       if (history.length > MAX_HISTORY) history.shift();
     }
   };
