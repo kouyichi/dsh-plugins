@@ -46,6 +46,8 @@ async function makeCtx(overrides = {}) {
       denyPaths: overrides.denyPaths,
       isolateRoots: overrides.isolateRoots,
       noToolsPaths: overrides.noToolsPaths,
+      commandReadGuard: overrides.commandReadGuard,
+      systemReadPaths: overrides.systemReadPaths,
     },
     logger: { info() {}, warn() {} },
     get(name) {
@@ -175,6 +177,41 @@ test("隔离根自身可浏览（容器目录），根下非 workspace 目录仍
     () => pickerCap.list(`${ROOT}/cambricon-work/dsh-cc/other-dir`),
     (err) => err.code === "WORKSPACE_ALLOWLIST_DENIED"
   );
+});
+
+test("commandReadGuard：工具可用但读不了其他项目/拒绝区（bash 命令路径解析）", async () => {
+  const ROOT = "/workspace/algorithm";
+  const { guardFns, registry } = await makeCtx({
+    root: ROOT,
+    denyPaths: [`${ROOT}/cambricon-work/*`],
+    isolateRoots: [`${ROOT}/cambricon-work/dsh-cc`],
+    commandReadGuard: true,
+  });
+  await registry.create(`${ROOT}/cambricon-work/dsh-cc/dsh-mini`, "mini");
+  await registry.create(`${ROOT}/cambricon-work/dsh-cc/dsh-ptc`, "ptc");
+  const guard = guardFns[0];
+  const exec = (cwd, name, args) => ({ name, arguments: args, agent: { session: { header: { cwd } } } });
+  const mini = `${ROOT}/cambricon-work/dsh-cc/dsh-mini`;
+  const ptc = `${ROOT}/cambricon-work/dsh-cc/dsh-ptc`;
+  // 工具本身可用：bash 在自己目录内操作 → 放行
+  assert.equal(guard(exec(mini, "bash", { command: `ls ${mini}` })), undefined);
+  assert.equal(guard(exec(mini, "bash", { command: "pwd && echo hi" })), undefined);
+  // 系统路径白名单 → 放行
+  assert.equal(guard(exec(mini, "bash", { command: "ls /tmp && head /etc/hostname" })), undefined);
+  // 读其他项目 → 拒绝
+  const denied = guard(exec(mini, "bash", { command: `cat ${ptc}/secret.txt` }));
+  assert.ok(typeof denied === "string" && denied.includes("访问被拒绝"));
+  // code_run 含拒绝区路径 → 拒绝
+  const denied2 = guard(exec(mini, "code_run", { code: `open("${ptc}/x.py")` }));
+  assert.ok(typeof denied2 === "string");
+  // 非命令工具带 path 字段 → 拒绝
+  const denied3 = guard(exec(mini, "fs_read", { path: `${ptc}/x.py` }));
+  assert.ok(typeof denied3 === "string");
+  // 白名单区（allowedRoots 非 deny）→ 放行
+  assert.equal(guard(exec(mini, "bash", { command: `ls ${ROOT}/hermes-work` })), undefined);
+  // 非 workspace 会话（cwd 不在任何 workspace）：全局 denyPaths 生效
+  const denied4 = guard(exec(`${ROOT}/hermes-work`, "bash", { command: `cat ${ptc}/x` }));
+  assert.ok(typeof denied4 === "string");
 });
 
 test("noToolsPaths：cwd 命中拒绝所有工具（code_run/bash 等），未命中放行", async () => {

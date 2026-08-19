@@ -22,8 +22,14 @@
  *   isolateRoots: string[]  隔离根：其下的目录可注册为 workspace，且每个
  *                           workspace 只能访问自己的 path 子树
  *   denyFsReads:  boolean   是否开启 fs 工具读隔离（建议 true）
- *   noToolsPaths: string[]  完全禁用工具的路径（cwd 命中即拒绝所有工具调用，
- *                           code_run/bash 等一律不行；尾部 `*` 通配）
+ *   noToolsPaths: string[]  完全禁用工具的路径（cwd 命中即拒绝所有工具调用；
+ *                           尾部 `*` 通配）——如不需要全禁请留空
+ *   commandReadGuard: boolean  命令型工具（bash/code_run 等）读路径过滤：
+ *                           解析命令/参数中的路径，命中拒绝区（其他项目目录、
+ *                           denyPaths 区）即拒绝该次调用；工具本身可用
+ *   systemReadPaths: string[] 命令工具可读的系统路径白名单（默认
+ *                           /tmp /usr /bin /sbin /etc /dev /proc /sys /var
+ *                           /root/.dsh /root/.nvm）
  *
  * 挂载：web profile（web-app bundle 提供 workspaceRegistry/directoryPicker
  * 服务；家级/headless 无此服务，inject 硬依赖会激活失败，不要挂家级）。
@@ -32,6 +38,7 @@
  */
 
 import { realpath } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import path from "node:path";
 
 export const name = "dsh-workspace-allowlist";
@@ -51,6 +58,11 @@ export function apply(ctx, config) {
   const denyFsReads = Boolean(cfg.denyFsReads);
   const isolateRoots = (cfg.isolateRoots ?? [])
     .map((p) => path.resolve(String(p)));
+  const commandReadGuard = Boolean(cfg.commandReadGuard);
+  const systemReadPaths = (cfg.systemReadPaths ?? [
+    "/tmp", "/usr", "/bin", "/sbin", "/etc", "/dev", "/proc", "/sys", "/var",
+    "/root/.dsh", "/root/.nvm",
+  ]).map((p) => path.resolve(String(p)));
   // 完全禁用工具的路径（cwd 命中即拒绝全部工具）
   const noToolsPatterns = (cfg.noToolsPaths ?? []).map((p) => {
     const s = String(p);
@@ -80,6 +92,15 @@ export function apply(ctx, config) {
   async function canonical(target) {
     try {
       return await realpath(String(target));
+    } catch {
+      return path.resolve(String(target));
+    }
+  }
+
+  /** 同步 canonical（guard 回调用）。 */
+  function canonicalSync(target) {
+    try {
+      return realpathSync(String(target));
     } catch {
       return path.resolve(String(target));
     }
@@ -123,6 +144,18 @@ export function apply(ctx, config) {
       if (isolatedPaths().some((p) => underRoot(canon, p))) return true;
       return false;
     }
+    return true;
+  }
+
+  /** 严格规则（工具读路径用）——同步版（guard 回调必须同步）：
+   * 系统白名单 ∪ 自己 workspace ∪ 隔离根自身 ∪ （allowedRoots − denyPaths）。 */
+  function strictAllowedSync(target, own) {
+    const canon = canonicalSync(target);
+    if (systemReadPaths.some((r) => underRoot(canon, r))) return true;
+    if (own && underRoot(canon, own)) return true;
+    if (isolateRoots.some((r) => canon === r)) return true;
+    if (!underAny(canon, allowedRoots)) return false;
+    if (isDenied(canon)) return false;
     return true;
   }
 
@@ -202,24 +235,84 @@ export function apply(ctx, config) {
     warn("directoryPicker 不可用，前端浏览过滤未生效");
   }
 
-  // ── 层 4：完全禁用工具（noToolsPaths —— code_run/bash 等一律不行）──
-  if (noToolsPatterns.length > 0) {
+  // ── 层 4：工具级防护（noToolsPaths 全禁 / commandReadGuard 读路径过滤）──
+  if (noToolsPatterns.length > 0 || commandReadGuard) {
     const tools = ctx.get("tools");
     if (tools?.guard) {
       tools.guard((exec) => {
         const cwd = exec?.agent?.session?.header?.cwd;
         if (typeof cwd !== "string" || cwd === "") return undefined;
-        const hit = noToolsPatterns.some((d) =>
-          d.type === "glob" ? d.regex.test(cwd) : cwd === d.value || cwd.startsWith(d.value + path.sep)
-        );
-        if (hit) {
-          return `[dsh-workspace-allowlist] 该工作区已禁用所有工具（noToolsPaths: ${cfg.noToolsPaths.join(", ")}）`;
+        // 4a. 完全禁用（noToolsPaths）
+        if (noToolsPatterns.length > 0) {
+          const hit = noToolsPatterns.some((d) =>
+            d.type === "glob" ? d.regex.test(cwd) : cwd === d.value || cwd.startsWith(d.value + path.sep)
+          );
+          if (hit) {
+            return `[dsh-workspace-allowlist] 该工作区已禁用所有工具（noToolsPaths: ${cfg.noToolsPaths.join(", ")}）`;
+          }
+        }
+        // 4b. 命令型工具读路径过滤（bash/code_run 等——工具可用，但读不了拒绝区）
+        if (commandReadGuard) {
+          const own = registeredPaths().find((p) => underRoot(cwd, p));
+          const toolName = String(exec?.name ?? "");
+          const paths = extractReadPaths(toolName, exec?.arguments);
+          if (paths.length > 0) {
+            const blocked = [];
+            for (const p of paths) {
+              if (!strictAllowedSync(p, own)) blocked.push(p);
+            }
+            if (blocked.length > 0) {
+              return `[dsh-workspace-allowlist] 工具 ${toolName} 访问被拒绝（不在允许的项目目录内）: ${blocked.join(", ")}`;
+            }
+          }
         }
         return undefined;
       });
-      info(`工具完全禁用路径生效: ${cfg.noToolsPaths.join(", ")}`);
+      if (commandReadGuard) info(`命令工具读路径过滤生效（系统白名单: ${systemReadPaths.join(", ")}）`);
+      if (noToolsPatterns.length > 0) info(`工具完全禁用路径生效: ${cfg.noToolsPaths.join(", ")}`);
     } else {
-      warn("tools.guard 不可用，工具禁用未生效");
+      warn("tools.guard 不可用，工具防护未生效");
     }
   }
+}
+
+/** 从工具名与参数中提取需要校验的路径（命令文本 + path/filePath 字段）。 */
+function extractReadPaths(toolName, args) {
+  const paths = new Set();
+  const argsObj = args ?? {};
+  const texts = [];
+  const name = String(toolName ?? "");
+  const isCommandTool =
+    name === "bash" || name.includes("code_run") || name.includes("run_code") ||
+    name.includes("execute") || name.includes("terminal") || name.includes("shell");
+  if (isCommandTool) {
+    for (const k of ["command", "code", "input", "prompt"]) {
+      const v = argsObj[k];
+      if (typeof v === "string" && v.length > 0) texts.push(v);
+    }
+  }
+  // 通用：任何工具携带的路径字段
+  for (const k of ["path", "filePath", "target", "directory", "dir"]) {
+    const v = argsObj[k];
+    if (typeof v === "string" && v.length > 0) texts.push(v);
+    if (v && typeof v === "object") {
+      if (typeof v.filePath === "string") texts.push(v.filePath);
+      if (typeof v.path === "string") texts.push(v.path);
+    }
+  }
+  const home = process.env.HOME ?? "/root";
+  for (const t of texts) {
+    // 绝对路径
+    for (const m of t.matchAll(/(?<![A-Za-z0-9_-])(\/[^\s"'`<>|;&()]+)/g)) {
+      let p = m[1];
+      p = p.replace(/[.,;:!?]+$/, "");
+      if (p.startsWith("/")) paths.add(p);
+    }
+    // ~ 展开
+    for (const m of t.matchAll(/~(\/[^\s"'`<>|;&()]*)?/g)) {
+      if (m[1] === undefined || m[1] === "") paths.add(home);
+      else paths.add(home + m[1]);
+    }
+  }
+  return [...paths];
 }
