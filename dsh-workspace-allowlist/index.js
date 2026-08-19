@@ -113,12 +113,13 @@ export function apply(ctx, config) {
     return registeredPaths().filter((p) => underAny(p, isolateRoots));
   }
 
-  /** 全局规则（白名单 − 排除），isolateRoots 下的注册路径豁免 deny。 */
+  /** 全局规则（白名单 − 排除），隔离根自身/隔离根下已注册路径豁免 deny。 */
   async function globalAllowed(target) {
     const canon = await canonical(target);
     if (!underAny(canon, allowedRoots)) return false;
     if (isDenied(canon)) {
-      // 豁免：隔离根下已注册的 workspace 自己的路径
+      // 豁免：隔离根自身（容器目录可展开，等值）+ 隔离根下已注册 workspace 的路径
+      if (isolateRoots.some((r) => canon === r)) return true;
       if (isolatedPaths().some((p) => underRoot(canon, p))) return true;
       return false;
     }

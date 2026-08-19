@@ -159,6 +159,24 @@ test("前端目录浏览过滤：未注册目录拒绝、隔离 workspace 自己
   assert.equal(calls.picker.length, 2);
 });
 
+test("隔离根自身可浏览（容器目录），根下非 workspace 目录仍拒绝", async () => {
+  const ROOT = "/workspace/algorithm";
+  const { pickerCap, registry, calls } = await makeCtx({
+    root: ROOT,
+    denyPaths: [`${ROOT}/cambricon-work/*`],
+    isolateRoots: [`${ROOT}/cambricon-work/dsh-cc`],
+  });
+  await registry.create(`${ROOT}/cambricon-work/dsh-cc/dsh-proj-a`, "a");
+  // 隔离根自身（cambricon-work/* 命中但豁免）→ 放行
+  await pickerCap.list(`${ROOT}/cambricon-work/dsh-cc`);
+  assert.equal(calls.picker.length, 1);
+  // 隔离根下非 workspace 的目录 → 拒绝
+  await assert.rejects(
+    () => pickerCap.list(`${ROOT}/cambricon-work/dsh-cc/other-dir`),
+    (err) => err.code === "WORKSPACE_ALLOWLIST_DENIED"
+  );
+});
+
 test("noToolsPaths：cwd 命中拒绝所有工具（code_run/bash 等），未命中放行", async () => {
   const { guardFns } = await makeCtx({
     noToolsPaths: ["/workspace/algorithm/cambricon-work/dsh-cc/dsh-ptc-pro"],
