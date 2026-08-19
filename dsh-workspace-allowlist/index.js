@@ -4,10 +4,17 @@
  * 两层控制（config 开关）：
  *  1. workspace 注册白名单（默认开）：web 文件浏览 = workspace 注册表，
  *     只显示已注册的项目目录。本插件拦截 workspaceRegistry.create，
- *     目录不在 allowedRoots 内一律拒绝 → 未允许的项目在界面上不可见。
+ *     目录不在 allowedRoots 内（或在 denyPaths 内）一律拒绝 →
+ *     未允许的项目在界面上不可见。
  *  2. fs 路径过滤（默认关，denyFsReads: true 开启）：包装 fs 服务的
  *     resolve/stat/readText/listDir 等读写入口，路径不在 allowedRoots
- *     内直接抛 WORKSPACE_ALLOWLIST_DENIED → 硬性不可读。
+ *     内或命中断言路径直接抛 WORKSPACE_ALLOWLIST_DENIED → 硬性不可读。
+ *
+ * 配置：
+ *   allowedRoots: string[]  允许的项目根（realpath 比较，子目录继承）
+ *   denyPaths:    string[]  排除列表（优先级高于 allowedRoots；支持尾部
+ *                           `*` 通配，如 "/workspace/algorithm/cambricon-work/cnagent-skill*"）
+ *   denyFsReads:  boolean   是否同时硬隔离 fs 读写（默认 false）
  *
  * 挂载：web profile（web-app bundle 提供 workspaceRegistry 服务；
  * 家级/headless 无此服务，inject 硬依赖会激活失败，不要挂家级）。
@@ -33,6 +40,17 @@ export function apply(ctx, config) {
   const allowedRoots = (cfg.allowedRoots ?? ["/workspace/algorithm"])
     .map((p) => path.resolve(String(p)));
   const denyFsReads = Boolean(cfg.denyFsReads);
+  // 排除列表：尾部 `*` 视为通配（匹配任意字符），其余为前缀/等值匹配
+  const denyPatterns = (cfg.denyPaths ?? []).map((p) => {
+    const s = String(p);
+    if (s.endsWith("*")) {
+      const prefix = s.slice(0, -1);
+      return { type: "glob", regex: new RegExp(
+        "^" + prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ".*$"
+      ) };
+    }
+    return { type: "prefix", value: path.resolve(s) };
+  });
 
   const info = (msg) => ctx.logger?.info?.(`[dsh-workspace-allowlist] ${msg}`);
   const warn = (msg) => ctx.logger?.warn?.(`[dsh-workspace-allowlist] ${msg}`);
@@ -46,8 +64,15 @@ export function apply(ctx, config) {
     }
   }
 
+  function isDenied(canon) {
+    return denyPatterns.some((d) =>
+      d.type === "glob" ? d.regex.test(canon) : canon === d.value || canon.startsWith(d.value + path.sep)
+    );
+  }
+
   async function isAllowed(target) {
     const canon = await canonical(target);
+    if (isDenied(canon)) return false;
     return allowedRoots.some((root) =>
       canon === root || canon.startsWith(root + path.sep)
     );

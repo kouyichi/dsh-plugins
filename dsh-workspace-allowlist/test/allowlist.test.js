@@ -28,7 +28,11 @@ async function makeCtx(overrides = {}) {
     async listDir(t) { calls.fs.push(["listDir", t]); return []; },
   };
   const ctx = {
-    config: { allowedRoots: allowed, denyFsReads: overrides.denyFsReads ?? false },
+    config: {
+      allowedRoots: allowed,
+      denyFsReads: overrides.denyFsReads ?? false,
+      denyPaths: overrides.denyPaths,
+    },
     logger: { info() {}, warn() {} },
     get(name) {
       if (name === "workspaceRegistry") return registry;
@@ -63,6 +67,36 @@ test("前缀相似目录拒绝（/workspace/algoritmX 不在 /workspace/algorith
   // 真正的子目录放行
   await registry.create("/workspace/algorithm/hermes-work", "h");
   assert.equal(created.length, 1);
+});
+
+test("denyPaths 排除（精确 + 通配），优先级高于 allowedRoots", async () => {
+  const { registry, created } = await makeCtx({
+    allowedRoots: ["/workspace/algorithm"],
+    denyPaths: [
+      "/workspace/algorithm/cambricon-work/cnagent-skill3",
+      "/workspace/algorithm/cambricon-work/cnagent-skill*",
+    ],
+  });
+  // 白名单内但不在排除项 → 放行
+  await registry.create("/workspace/algorithm/hermes-work", "h");
+  assert.equal(created.length, 1);
+  // 精确排除
+  await assert.rejects(
+    () => registry.create("/workspace/algorithm/cambricon-work/cnagent-skill3", "x"),
+    (err) => err.code === "WORKSPACE_ALLOWLIST_DENIED"
+  );
+  // 通配排除（cnagent-skill4/5/8/9… 全部拒绝）
+  await assert.rejects(
+    () => registry.create("/workspace/algorithm/cambricon-work/cnagent-skill8", "x"),
+    (err) => err.code === "WORKSPACE_ALLOWLIST_DENIED"
+  );
+  await assert.rejects(
+    () => registry.create("/workspace/algorithm/cambricon-work/cnagent-skill9-new", "x"),
+    (err) => err.code === "WORKSPACE_ALLOWLIST_DENIED"
+  );
+  // 通配不误伤普通前缀
+  await registry.create("/workspace/algorithm/cambricon-work/cnagent-show", "show");
+  assert.equal(created.length, 2);
 });
 
 test("denyFsReads=false 时不包装 fs（仅注册白名单）", async () => {
