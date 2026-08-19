@@ -35,23 +35,29 @@ async function makeCtx(overrides = {}) {
     list: async (t, signal) => { calls.picker.push(t); return { entries: [] }; },
   };
   const picker = { capability: () => pickerCap };
+  const guardFns = [];
+  const tools = {
+    guard: (fn) => { guardFns.push(fn); return () => {}; },
+  };
   const ctx = {
     config: {
       allowedRoots: allowed,
       denyFsReads: overrides.denyFsReads ?? false,
       denyPaths: overrides.denyPaths,
       isolateRoots: overrides.isolateRoots,
+      noToolsPaths: overrides.noToolsPaths,
     },
     logger: { info() {}, warn() {} },
     get(name) {
       if (name === "workspaceRegistry") return registry;
       if (name === "fs") return fsSvc;
       if (name === "directoryPicker") return picker;
+      if (name === "tools") return tools;
       return undefined;
     },
   };
   await apply(ctx, ctx.config);
-  return { root, registry, fsSvc, pickerCap, calls, created };
+  return { root, registry, fsSvc, pickerCap, calls, created, guardFns };
 }
 
 test("白名单内路径放行（等值 + 子目录）", async () => {
@@ -151,6 +157,31 @@ test("前端目录浏览过滤：未注册目录拒绝、隔离 workspace 自己
   // 白名单内非 deny 区域 → 放行
   await pickerCap.list(ROOT);
   assert.equal(calls.picker.length, 2);
+});
+
+test("noToolsPaths：cwd 命中拒绝所有工具（code_run/bash 等），未命中放行", async () => {
+  const { guardFns } = await makeCtx({
+    noToolsPaths: ["/workspace/algorithm/cambricon-work/dsh-cc/dsh-ptc-pro"],
+  });
+  assert.equal(guardFns.length, 1);
+  const guard = guardFns[0];
+  const exec = (cwd, name) => ({ name, arguments: {}, agent: { session: { header: { cwd } } } });
+  // 命中 → 拒绝字符串（guard 返回非 undefined = 拒绝）
+  const denied = guard(exec("/workspace/algorithm/cambricon-work/dsh-cc/dsh-ptc-pro", "bash"));
+  assert.ok(typeof denied === "string" && denied.includes("已禁用所有工具"));
+  const denied2 = guard(exec("/workspace/algorithm/cambricon-work/dsh-cc/dsh-ptc-pro/sub", "code_run"));
+  assert.ok(typeof denied2 === "string");
+  // 未命中 → undefined（放行）
+  assert.equal(guard(exec("/workspace/algorithm/cambricon-work/dsh-cc/dsh-ptc", "bash")), undefined);
+  assert.equal(guard(exec("/workspace/algorithm/hermes-work", "code_run")), undefined);
+});
+
+test("noToolsPaths 支持尾部通配", async () => {
+  const { guardFns } = await makeCtx({ noToolsPaths: ["/workspace/algorithm/cambricon-work/dsh-cc/dsh-ptc*"] });
+  const guard = guardFns[0];
+  const exec = (cwd) => ({ name: "bash", arguments: {}, agent: { session: { header: { cwd } } } });
+  assert.ok(typeof guard(exec("/workspace/algorithm/cambricon-work/dsh-cc/dsh-ptc2")) === "string");
+  assert.equal(guard(exec("/workspace/algorithm/cambricon-work/dsh-cc/dsh-mini")), undefined);
 });
 
 test("denyFsReads=false 时不包装 fs（仅注册白名单）", async () => {

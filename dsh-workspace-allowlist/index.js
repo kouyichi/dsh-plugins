@@ -22,6 +22,8 @@
  *   isolateRoots: string[]  隔离根：其下的目录可注册为 workspace，且每个
  *                           workspace 只能访问自己的 path 子树
  *   denyFsReads:  boolean   是否开启 fs 工具读隔离（建议 true）
+ *   noToolsPaths: string[]  完全禁用工具的路径（cwd 命中即拒绝所有工具调用，
+ *                           code_run/bash 等一律不行；尾部 `*` 通配）
  *
  * 挂载：web profile（web-app bundle 提供 workspaceRegistry/directoryPicker
  * 服务；家级/headless 无此服务，inject 硬依赖会激活失败，不要挂家级）。
@@ -33,7 +35,7 @@ import { realpath } from "node:fs/promises";
 import path from "node:path";
 
 export const name = "dsh-workspace-allowlist";
-export const inject = ["workspaceRegistry", "fs", "directoryPicker"];
+export const inject = ["workspaceRegistry", "fs", "directoryPicker", "tools"];
 
 /** fs 服务的读写入口方法（LocalFileSystem 面）。 */
 const FS_METHODS = [
@@ -49,6 +51,17 @@ export function apply(ctx, config) {
   const denyFsReads = Boolean(cfg.denyFsReads);
   const isolateRoots = (cfg.isolateRoots ?? [])
     .map((p) => path.resolve(String(p)));
+  // 完全禁用工具的路径（cwd 命中即拒绝全部工具）
+  const noToolsPatterns = (cfg.noToolsPaths ?? []).map((p) => {
+    const s = String(p);
+    if (s.endsWith("*")) {
+      const prefix = s.slice(0, -1);
+      return { type: "glob", regex: new RegExp(
+        "^" + prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ".*$"
+      ) };
+    }
+    return { type: "prefix", value: path.resolve(s) };
+  });
   // 排除列表：尾部 `*` 视为通配（匹配任意字符），其余为前缀/等值匹配
   const denyPatterns = (cfg.denyPaths ?? []).map((p) => {
     const s = String(p);
@@ -186,5 +199,26 @@ export function apply(ctx, config) {
     }
   } else {
     warn("directoryPicker 不可用，前端浏览过滤未生效");
+  }
+
+  // ── 层 4：完全禁用工具（noToolsPaths —— code_run/bash 等一律不行）──
+  if (noToolsPatterns.length > 0) {
+    const tools = ctx.get("tools");
+    if (tools?.guard) {
+      tools.guard((exec) => {
+        const cwd = exec?.agent?.session?.header?.cwd;
+        if (typeof cwd !== "string" || cwd === "") return undefined;
+        const hit = noToolsPatterns.some((d) =>
+          d.type === "glob" ? d.regex.test(cwd) : cwd === d.value || cwd.startsWith(d.value + path.sep)
+        );
+        if (hit) {
+          return `[dsh-workspace-allowlist] 该工作区已禁用所有工具（noToolsPaths: ${cfg.noToolsPaths.join(", ")}）`;
+        }
+        return undefined;
+      });
+      info(`工具完全禁用路径生效: ${cfg.noToolsPaths.join(", ")}`);
+    } else {
+      warn("tools.guard 不可用，工具禁用未生效");
+    }
   }
 }
