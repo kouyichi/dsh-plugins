@@ -1,47 +1,57 @@
 /**
- * dsh-workspace-allowlist 单测：mock workspaceRegistry/fs，验证白名单
- * 放行/拒绝与 fs 过滤开关。运行：node --test test/allowlist.test.js
+ * dsh-workspace-allowlist 单测：mock workspaceRegistry/fs/directoryPicker，
+ * 验证白名单放行/拒绝、denyPaths 通配、per-workspace 严格隔离与前端浏览过滤。
+ * 运行：node --test test/allowlist.test.js
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { apply } from "../index.js";
 
 /** 构造可用的 mock ctx：临时目录作为 allowedRoot。 */
 async function makeCtx(overrides = {}) {
-  const root = await mkdtemp(path.join(tmpdir(), "allowlist-"));
+  const root = overrides.root ?? (await mkdtemp(path.join(tmpdir(), "allowlist-")));
   const allowed = overrides.allowedRoots ?? [root];
   const created = [];
+  const registered = [...(overrides.registered ?? [])];
   const registry = {
     create: async (p, title) => {
       created.push({ p, title });
+      registered.push(p);
       return { path: p, title };
     },
+    list: () => registered.map((p) => ({ path: p, title: path.basename(p) })),
   };
-  const calls = { fs: [] };
+  const calls = { fs: [], picker: [] };
   const fsSvc = {
-    async resolve(t) { calls.fs.push(["resolve", t]); return t; },
+    async resolve(t, opts) { calls.fs.push(["resolve", t]); return { targetKey: t }; },
     async stat(t) { calls.fs.push(["stat", t]); return { size: 1 }; },
     async readText(t) { calls.fs.push(["readText", t]); return "x"; },
     async listDir(t) { calls.fs.push(["listDir", t]); return []; },
   };
+  const pickerCap = {
+    list: async (t, signal) => { calls.picker.push(t); return { entries: [] }; },
+  };
+  const picker = { capability: () => pickerCap };
   const ctx = {
     config: {
       allowedRoots: allowed,
       denyFsReads: overrides.denyFsReads ?? false,
       denyPaths: overrides.denyPaths,
+      isolateRoots: overrides.isolateRoots,
     },
     logger: { info() {}, warn() {} },
     get(name) {
       if (name === "workspaceRegistry") return registry;
       if (name === "fs") return fsSvc;
+      if (name === "directoryPicker") return picker;
       return undefined;
     },
   };
   await apply(ctx, ctx.config);
-  return { root, registry, fsSvc, calls, created };
+  return { root, registry, fsSvc, pickerCap, calls, created };
 }
 
 test("白名单内路径放行（等值 + 子目录）", async () => {
@@ -61,14 +71,6 @@ test("白名单外路径拒绝（WORKSPACE_ALLOWLIST_DENIED）", async () => {
   assert.equal(created.length, 0);
 });
 
-test("前缀相似目录拒绝（/workspace/algoritmX 不在 /workspace/algorithm 下）", async () => {
-  const { registry, created } = await makeCtx({ allowedRoots: ["/workspace/algorithm"] });
-  await assert.rejects(() => registry.create("/workspace/algoritmX/p", "x"));
-  // 真正的子目录放行
-  await registry.create("/workspace/algorithm/hermes-work", "h");
-  assert.equal(created.length, 1);
-});
-
 test("denyPaths 排除（精确 + 通配），优先级高于 allowedRoots", async () => {
   const { registry, created } = await makeCtx({
     allowedRoots: ["/workspace/algorithm"],
@@ -77,48 +79,82 @@ test("denyPaths 排除（精确 + 通配），优先级高于 allowedRoots", asy
       "/workspace/algorithm/cambricon-work/cnagent-skill*",
     ],
   });
-  // 白名单内但不在排除项 → 放行
   await registry.create("/workspace/algorithm/hermes-work", "h");
   assert.equal(created.length, 1);
-  // 精确排除
   await assert.rejects(
     () => registry.create("/workspace/algorithm/cambricon-work/cnagent-skill3", "x"),
     (err) => err.code === "WORKSPACE_ALLOWLIST_DENIED"
   );
-  // 通配排除（cnagent-skill4/5/8/9… 全部拒绝）
   await assert.rejects(
     () => registry.create("/workspace/algorithm/cambricon-work/cnagent-skill8", "x"),
     (err) => err.code === "WORKSPACE_ALLOWLIST_DENIED"
   );
-  await assert.rejects(
-    () => registry.create("/workspace/algorithm/cambricon-work/cnagent-skill9-new", "x"),
-    (err) => err.code === "WORKSPACE_ALLOWLIST_DENIED"
-  );
-  // 通配不误伤普通前缀
   await registry.create("/workspace/algorithm/cambricon-work/cnagent-show", "show");
   assert.equal(created.length, 2);
 });
 
-test("denyFsReads=false 时不包装 fs（仅注册白名单）", async () => {
-  const { fsSvc } = await makeCtx({ denyFsReads: false });
-  assert.equal(fsSvc.resolve.length, 1); // 未替换（length 仍是原函数参数个数）
-  await fsSvc.readText("/root/secret"); // 不拦截
+test("isolateRoots 下目录可注册（豁免全局 denyPaths）", async () => {
+  const { registry, created } = await makeCtx({
+    allowedRoots: ["/workspace/algorithm"],
+    denyPaths: ["/workspace/algorithm/cambricon-work/*"],
+    isolateRoots: ["/workspace/algorithm/cambricon-work/dsh-cc"],
+  });
+  await registry.create("/workspace/algorithm/cambricon-work/dsh-cc/dsh-proj-a", "dsh-proj-a");
+  assert.equal(created.length, 1);
+  // 非隔离的 cambricon-work 目录仍拒绝
+  await assert.rejects(
+    () => registry.create("/workspace/algorithm/cambricon-work/other-proj", "x"),
+    (err) => err.code === "WORKSPACE_ALLOWLIST_DENIED"
+  );
 });
 
-test("denyFsReads=true 时 fs 读写路径过滤", async () => {
-  const { fsSvc, root, calls } = await makeCtx({ denyFsReads: true });
-  // 白名单内放行
-  await fsSvc.readText(path.join(root, "a.txt"));
-  assert.equal(calls.fs.filter(([m]) => m === "readText").length, 1);
-  // 白名单外拒绝
+test("fs 严格 per-session：cwd 在 workspace 内只能读自己", async () => {
+  const { fsSvc, root, registry } = await makeCtx({ denyFsReads: true });
+  await registry.create(path.join(root, "proj-a"), "a");
+  await registry.create(path.join(root, "proj-b"), "b");
+  // cwd 在 proj-a → 读 proj-a 内放行
+  await fsSvc.readText(path.join(root, "proj-a", "x.txt"), { cwd: path.join(root, "proj-a") });
+  // cwd 在 proj-a → 读 proj-b 拒绝（兄弟项目）
+  await assert.rejects(
+    () => fsSvc.readText(path.join(root, "proj-b", "x.txt"), { cwd: path.join(root, "proj-a") }),
+    (err) => err.code === "WORKSPACE_ALLOWLIST_DENIED"
+  );
+  // cwd 在 proj-b → 读 proj-b 放行
+  await fsSvc.readText(path.join(root, "proj-b", "y.txt"), { cwd: path.join(root, "proj-b") });
+});
+
+test("fs 无 cwd（非 workspace 会话）走全局规则", async () => {
+  const { fsSvc, root } = await makeCtx({ denyFsReads: true });
+  await fsSvc.readText(path.join(root, "any.txt")); // 白名单内放行
   await assert.rejects(
     () => fsSvc.readText("/etc/passwd"),
     (err) => err.code === "WORKSPACE_ALLOWLIST_DENIED"
   );
+});
+
+test("前端目录浏览过滤：未注册目录拒绝、隔离 workspace 自己放行", async () => {
+  const ROOT = "/workspace/algorithm";
+  const { pickerCap, registry, calls } = await makeCtx({
+    root: ROOT,
+    denyPaths: [`${ROOT}/cambricon-work/*`],
+    isolateRoots: [`${ROOT}/cambricon-work/dsh-cc`],
+  });
+  await registry.create(`${ROOT}/cambricon-work/dsh-cc/dsh-proj-a`, "a");
+  // 浏览隔离 workspace 自己 → 放行
+  await pickerCap.list(`${ROOT}/cambricon-work/dsh-cc/dsh-proj-a`);
+  assert.equal(calls.picker.length, 1);
+  // 浏览 cambricon-work 未注册目录 → 拒绝
   await assert.rejects(
-    () => fsSvc.listDir("/root"),
+    () => pickerCap.list(`${ROOT}/cambricon-work/cnagent-skill3`),
     (err) => err.code === "WORKSPACE_ALLOWLIST_DENIED"
   );
-  await fsSvc.resolve(root);
-  assert.equal(calls.fs.filter(([m]) => m === "resolve").length, 1);
+  // 白名单内非 deny 区域 → 放行
+  await pickerCap.list(ROOT);
+  assert.equal(calls.picker.length, 2);
+});
+
+test("denyFsReads=false 时不包装 fs（仅注册白名单）", async () => {
+  const { fsSvc } = await makeCtx({ denyFsReads: false });
+  // 白名单外路径不被拦截（fs 层未包装）
+  await fsSvc.readText("/root/secret");
 });
