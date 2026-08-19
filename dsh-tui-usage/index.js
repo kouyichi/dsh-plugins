@@ -8,7 +8,7 @@
  * @module dsh-tui-usage
  */
 
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, openSync, readFileSync, readdirSync, readSync, closeSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { zstdDecompressSync } from "node:zlib";
@@ -22,9 +22,30 @@ const PRICING_FILE = join(DSH_HOME, "meter", "pricing.json");
 
 const DEFAULT_PRICING = { input_per_mtok: 0.5, cache_read_per_mtok: 0.1, output_per_mtok: 1.5 };
 
+// H15: pricing 模块级缓存 —— 状态栏 render 每次调用都会触发，不能每次读盘。
+// 策略：启动/首次读一次，之后靠 mtime 变化刷新 + 60s TTL 双保险。
+const PRICING_TTL_MS = 60_000;
+let pricingCache = null;
+let pricingMtime = -1;
+let pricingLoadedAt = 0;
+
 function loadPricing() {
-  try { return { ...DEFAULT_PRICING, ...JSON.parse(readFileSync(PRICING_FILE, "utf8")) }; }
-  catch { return { ...DEFAULT_PRICING }; }
+  const now = Date.now();
+  if (pricingCache && now - pricingLoadedAt < PRICING_TTL_MS) return pricingCache;
+  let next = { ...DEFAULT_PRICING };
+  try {
+    const st = statSync(PRICING_FILE);
+    if (pricingCache && st.mtimeMs === pricingMtime) {
+      // 文件未变：延长缓存有效期，避免每次 render 都 stat
+      pricingLoadedAt = now;
+      return pricingCache;
+    }
+    pricingMtime = st.mtimeMs;
+    next = { ...DEFAULT_PRICING, ...JSON.parse(readFileSync(PRICING_FILE, "utf8")) };
+  } catch { /* 文件缺失/解析失败 → 默认价 */ }
+  pricingCache = next;
+  pricingLoadedAt = now;
+  return pricingCache;
 }
 
 const costOf = (u, p) =>
@@ -35,6 +56,18 @@ const costOf = (u, p) =>
 const fmtUsd = (v) => (v > 0 && v < 0.0001 ? "<$0.0001" : `$${v.toFixed(4)}`);
 
 const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd]);
+
+/** H16: 只读文件头部 maxBytes，避免面板扫描时整文件读入内存。 */
+function readHead(path, maxBytes = 64 * 1024) {
+  const fd = openSync(path, "r");
+  try {
+    const buf = Buffer.alloc(maxBytes);
+    const n = readSync(fd, buf, 0, maxBytes, 0);
+    return buf.subarray(0, n);
+  } finally {
+    try { closeSync(fd); } catch { /* ignore */ }
+  }
+}
 
 function decodeSessionLog(buf) {
   const chunks = [];
@@ -63,7 +96,8 @@ function usageFromEvents(events) {
     for (const k of Object.keys(v)) if (v[k] && typeof v[k] === "object") walk(v[k]);
   };
   for (const ev of events) {
-    if (ev.type === "turn/start" || ev.type === "turn/end") u.turns++;
+    // H14: turn/start 与 turn/end 是同一轮的两个端点，只按 turn/end 计一次
+    if (ev.type === "turn/end") u.turns++;
     else if (ev.type === "tool/call") u.toolCalls++;
     else if (ev.type === "tool/result") {
       const content = ev.data?.content || [];
@@ -169,7 +203,8 @@ export function apply(ctx) {
       for (const s2 of recentSessions(12)) {
         scanned++;
         try {
-          const text = decodeSessionLog(readFileSync(s2.path));
+          // H16: 每会话只解码前 64KB（近似聚合），不再全量解压整个文件
+          const text = decodeSessionLog(readHead(s2.path));
           const u = usageFromEvents(parseEvents(text));
           agg.uncachedInput += u.uncachedInput;
           agg.cacheRead += u.cacheRead;
@@ -180,7 +215,7 @@ export function apply(ctx) {
       if (scanned === 0) {
         lines.push("  （无会话记录）");
       } else {
-        lines.push(`  共 ${scanned} 会话，${withUsage} 个含 usage 数据`);
+        lines.push(`  共 ${scanned} 会话，${withUsage} 个含 usage 数据（每会话仅解码前 64KB，近似值）`);
         lines.push(`  输入 ${(agg.uncachedInput / 1000).toFixed(1)}k + 缓存读 ${(agg.cacheRead / 1000).toFixed(1)}k，输出 ${(agg.output / 1000).toFixed(1)}k`);
         const aggHit = agg.uncachedInput + agg.cacheRead > 0 ? Math.round(agg.cacheRead / (agg.uncachedInput + agg.cacheRead) * 100) : 0;
         lines.push(`  聚合缓存命中率 ${aggHit}% | 估算成本 ${fmtUsd(costOf(agg, p))}`);

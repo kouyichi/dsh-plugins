@@ -209,8 +209,18 @@ async function* translate(payloads) {
   // Some gateways never send [DONE] and keep the connection open after the
   // finish_reason; after finish we wait a short grace for trailing usage /
   // [DONE] and then finalize normally instead of hanging forever.
+  //
+  // S-15: 网关完全无数据时（连接挂着不吐字节）旧实现会永久 await iterator.next()。
+  // 给整个流一个总超时：从 translate 开始计时，120s 内既无 finish 也无 [DONE]
+  // 就抛 LlmError STREAM_TIMEOUT，而不是挂死；finish 之后的 usage grace 也受
+  // 该 deadline 兜底，不会无限等待。
+  // S-16: finish 后 grace 从 2.5s 提到 5s——不少网关先发 finish_reason 再补
+  // usage chunk，2.5s 偶发丢 usage；5s 覆盖常见网关延迟（仍受总超时约束）。
+  const STREAM_TOTAL_TIMEOUT_MS = 120_000;
+  const FINISH_GRACE_MS = 5000;
+  const deadline = Date.now() + STREAM_TOTAL_TIMEOUT_MS;
   const iterator = payloads[Symbol.asyncIterator]();
-  const grace = (ms) => new Promise((r) => setTimeout(r, ms));
+  const timeout = (ms) => new Promise((r) => setTimeout(r, ms));
   const finalize = function* (reason) {
     for (const block of order) yield { type: "block-end", index: block.index, block: closeBlock(block) };
     if (pendingUsage) yield { type: "usage", usage: pendingUsage };
@@ -227,16 +237,28 @@ async function* translate(payloads) {
     // backends end with a bare usage chunk and keep the connection open).
     // Once we have a finish signal (finish_reason or usage), race a short
     // grace against the next payload and finalize if nothing arrives.
-    if (pendingFinish || pendingUsage) {
-      result = await Promise.race([
-        iterator.next(),
-        grace(2500).then(() => ({ value: "[DONE]", done: false, fromTimeout: true })),
-      ]);
-    } else {
-      result = await iterator.next();
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      // 总预算耗尽且从未 finish：显式抛错而不是挂死
+      throw new LlmError(`provider stream timed out after ${STREAM_TOTAL_TIMEOUT_MS / 1000}s without finish`, "STREAM_TIMEOUT");
     }
+    // 每一轮 next() 都与剩余预算赛跑；finish 后走更短的 grace（受 remaining 封顶）
+    const waitMs = pendingFinish || pendingUsage ? Math.min(FINISH_GRACE_MS, remaining) : remaining;
+    result = await Promise.race([
+      iterator.next(),
+      timeout(waitMs).then(() => ({ value: undefined, done: false, fromTimeout: true })),
+    ]);
     if (result.done) {
       yield* finalize(pendingFinish ?? { kind: "stop" });
+      return;
+    }
+    if (result.fromTimeout) {
+      // 超时到期：已 finish/usage 则正常收尾；否则（网关完全静默/流中断）抛超时错误
+      if (pendingFinish || pendingUsage) {
+        yield* finalize(pendingFinish ?? { kind: "stop" });
+      } else {
+        throw new LlmError(`provider stream timed out after ${STREAM_TOTAL_TIMEOUT_MS / 1000}s without finish`, "STREAM_TIMEOUT");
+      }
       return;
     }
     const payload = result.value;
@@ -294,11 +316,7 @@ async function* translate(payloads) {
         pendingFinish = mapFinishReason(choice.finish_reason);
       }
     }
-    if ((pendingFinish || pendingUsage) && result.fromTimeout) {
-      // grace expired without [DONE]: finalize now
-      yield* finalize(pendingFinish ?? { kind: "stop" });
-      return;
-    }
+    // fromTimeout 处理已上移到循环头（S-15），此处不再需要
   }
 }
 
@@ -479,8 +497,9 @@ export async function resolveApiKey(conn, credentialsResolver) {
   if (typeof process !== "undefined" && process.env?.[ref]?.length > 0) {
     return assertUsableApiKey(process.env[ref], "dsh-tui-providers", ref);
   }
+  // S-17: 错误信息不再泄露 env/resolver 的存在性细节（避免凭据探测面）
   throw new LlmError(
-    `dsh-tui-providers: no API key for provider route; store ${ref} in ~/.dsh/.credentials.yaml or export ${ref} in the environment (resolver=${credentialsResolver ? "present" : "MISSING"}, env=${typeof process !== "undefined" && process.env?.[ref] ? "present" : "absent"})`,
+    `dsh-tui-providers: no API key for provider route; store ${ref} in ~/.dsh/.credentials.yaml or export ${ref} in the environment`,
     "MISSING_CREDENTIAL"
   );
 }

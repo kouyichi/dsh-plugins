@@ -92,6 +92,17 @@ function readdirSafe(d) {
   try { return readdirSync(d); } catch { return []; }
 }
 
+/** 工具参数渲染：对象/数组用 JSON.stringify（G207 同步：避免 [object Object]）。 */
+function fmtArgs(args) {
+  if (args == null) return "";
+  if (typeof args === "string") return args;
+  try {
+    return JSON.stringify(args);
+  } catch {
+    return String(args);
+  }
+}
+
 function renderTranscript(events, sessionId) {
   const out = [];
   out.push(`# 会话导出 ${sessionId}`);
@@ -105,7 +116,7 @@ function renderTranscript(events, sessionId) {
       const texts = collectText(ev).map((t) => t.trim()).filter((t) => t && !t.startsWith("<"));
       if (texts.length) { out.push(texts.join("\n\n")); out.push(""); }
     } else if (type === "tool/call") {
-      out.push(`- ⚙️ ${ev.data?.name}: \`${String(ev.data?.arguments ?? "").slice(0, 200)}\``);
+      out.push(`- ⚙️ ${ev.data?.name}: \`${fmtArgs(ev.data?.arguments).slice(0, 200)}\``);
     } else if (type === "tool/result") {
       const content = ev.data?.content || [];
       if (Array.isArray(content)) {
@@ -140,7 +151,12 @@ export function apply(ctx) {
         const events = parseEvents(decodeSessionLog(readFileSync(log)));
         const md = renderTranscript(events, sessionId);
         mkdirSync(EXPORTS_DIR, { recursive: true });
-        const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+        // 本地时区时间戳（G202 同步：不用 UTC 的 toISOString），保持原命名风格
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        const ts =
+          `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
+          `T${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
         const target = join(EXPORTS_DIR, `${basename(log).replace(".zstd", "")}-${ts}.md`);
         writeFileSync(target, md);
         ctl.notice("success", `已导出 ${(md.length / 1024).toFixed(1)} KB → ${target}`);

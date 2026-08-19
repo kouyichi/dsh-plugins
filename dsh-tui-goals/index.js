@@ -12,6 +12,13 @@
 export const name = "dsh-tui-goals";
 export const inject = ["tuiExtensions"];
 
+/** 本地时区 HH:MM:SS（G202：事件时间戳不用 UTC 的 toISOString）。 */
+function localTime(ms) {
+  const d = new Date(ms);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 export function apply(ctx) {
   const ext = ctx.get("tuiExtensions");
   if (!ext) {
@@ -80,7 +87,13 @@ export function apply(ctx) {
           lines.push(`目标: ${g.objective ?? "（未设置）"}`);
           lines.push(`阶段: ${g.phase ?? "?"} | 已启动轮次: ${g.roundsStarted ?? 0}/${g.maxGoalRounds ?? "∞"}`);
           if (g.blockedReason) lines.push(`阻塞: ${g.blockedReason}`);
-          else lines.push("状态: 进行中（未被阻塞）");
+          // 状态与 phase 一致（P-06）：paused 阶段不再显示"进行中"
+          const phase = String(g.phase ?? "").toLowerCase();
+          let status = "进行中（未被阻塞）";
+          if (phase === "paused" || phase.includes("pause")) status = "已暂停";
+          else if (phase === "blocked" || phase.includes("block")) status = "阻塞中";
+          else if (phase === "completed" || phase.includes("complete") || phase.includes("done")) status = "已完成";
+          lines.push(`状态: ${status}`);
           lines.push("");
           lines.push("用 /plan 或让 agent 设定新目标；/goal 查看（核心命令）");
         } else {
@@ -92,10 +105,13 @@ export function apply(ctx) {
         lines.push(`goals 服务读取失败: ${err.message}`);
       }
       if (events.length) {
+        const shown = events.slice(-8);
         lines.push("");
-        lines.push(`目标事件（最近 ${events.length} 条）:`);
-        for (const e of events.slice(-8)) {
-          lines.push(`  ${new Date(e.ts).toISOString().slice(11, 19)} ${e.text}`);
+        lines.push(
+          `目标事件（${shown.length} 条${events.length > shown.length ? "，仅显示最近 8 条" : ""}）:`
+        );
+        for (const e of shown) {
+          lines.push(`  ${localTime(e.ts)} ${e.text}`);
         }
       }
       return { lines };

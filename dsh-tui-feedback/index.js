@@ -51,10 +51,28 @@ export function apply(ctx) {
   }
   const disposers = [];
 
+  // D-01: 内核命令桥（app 分发）优先于砖 —— 内核 dsh-command-feedback 挂载时，
+  // /feedback 被内核直接接管（接受任意非空文本，无 up/down 校验），本砖 handler
+  // 不会触发；而 commands.register 对重名命令会抛错（dsh-commands 的
+  // CommandLayer/NamedEntries），砖无法替换内核命令 → 彻底修复需 app 侧配合（G1：
+  // 命令分发允许砖覆盖内核，或内核侧增加校验）。砖侧尽力：启动时检测并告警，
+  // /feedback 描述注明校验规则；内核缺失时由本砖兜底校验（brickFeedback）。
+  try {
+    const agents = ctx.get("agents");
+    const parent = agents?.currentInitiator?.() ?? agents?.roots?.()?.[0];
+    const dshCmds = ctx.get("commands");
+    if (parent && dshCmds?.list?.(parent)?.some((d) => d.name === "feedback")) {
+      ctx.logger.warn(
+        "[dsh-tui-feedback] 内核 /feedback 已接管（接受任意文本，无 up/down 校验），砖的校验逻辑不可达；" +
+          "需 app 侧配合（G1）：命令分发应允许砖覆盖内核命令，或内核侧按 up/down/👍/👎/good/bad + 备注 校验"
+      );
+    }
+  } catch { /* boot 期 agents 未就绪属正常，稍后内核存在时桥接层自然接管 */ }
+
   disposers.push(ext.registerCommand({
     name: "/feedback",
     busySafe: true,
-    description: "反馈（内核 /feedback <text> 优先；up/down 记到 feedback.json 由本砖兜底）",
+    description: "反馈：/feedback up|down|👍|👎|good|bad [备注]（内核接管时接受任意文本且本砖校验不可达，见 /plugins t 日志）",
     handler(full, ctl, store) {
       // 内核 /feedback 命令存在时转发内核执行（记录到会话日志）——
       // 核心命令桥已优先接管，本分支只在桥缺失/命令未注册时兜底。

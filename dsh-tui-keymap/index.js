@@ -27,10 +27,14 @@ export function apply(ctx) {
   let pending = null; // queued prompt while busy
   let poller = null;
 
-  function runCommand(ctl, name) {
+  function runCommand(ctl, name, store) {
     const def = ext.commands.get(name);
     if (def) {
-      try { def.handler(name, ctl, undefined); } catch (e) { ctl.notice("error", `${name} 失败: ${e.message}`); }
+      try {
+        // H05: 与 app index.js L1474 同款传法 —— store 句柄 + 当前状态扁平快照
+        // （原来传 undefined，命令 handler 读不到 store）。
+        def.handler(name, ctl, { ...store, ...store.get() });
+      } catch (e) { ctl.notice("error", `${name} 失败: ${e.message}`); }
     } else if (name === "/model") {
       ctl.openModel();
     } else if (name === "/help") {
@@ -42,16 +46,36 @@ export function apply(ctx) {
     }
   }
 
+  // H06: ctl 未暴露 submitWithHooks（app index.js），keymap 在 ctl.submit 前自行
+  // 跑一遍 onSubmit 钩子链（与 app handleSubmit 相同语义：true = 已消费），避免
+  // Alt+Enter / 排队发送绕过钩子（如 A2A @agent 分发）。若未来 app 提供
+  // ctl.submitWithHooks，可改为调用它。
+  function submitThroughHooks(text, ctl, store) {
+    for (const fn of ext.inputHooks.onSubmit) {
+      try {
+        if (fn(String(text || ""), { ctl, store }) === true) return; // consumed
+      } catch (e) { ctl.notice("error", `输入 hook 失败: ${e.message}`); }
+    }
+    ctl.submit(text);
+  }
+
   disposers.push(ext.addInputHook({
     onLeader: {
-      m: ({ ctl }) => runCommand(ctl, "/model"),
-      c: ({ ctl }) => runCommand(ctl, "/compact"),
-      t: ({ ctl }) => runCommand(ctl, "/theme"),
-      x: ({ ctl }) => runCommand(ctl, "/export"),
-      u: ({ ctl }) => runCommand(ctl, "/undo"),
-      s: ({ ctl }) => runCommand(ctl, "/usage"),
-      q: ({ ctl }) => runCommand(ctl, "/quit"),
-      h: ({ ctl }) => runCommand(ctl, "/help"),
+      m: ({ ctl, store }) => runCommand(ctl, "/model", store),
+      c: ({ ctl, store }) => runCommand(ctl, "/compact", store),
+      t: ({ ctl, store }) => runCommand(ctl, "/theme", store),
+      x: ({ ctl, store }) => runCommand(ctl, "/export", store),
+      u: ({ ctl, store }) => {
+        // H21: busy 时拒绝 /undo（重发输入会与当前回合交错）
+        if (store.get().input?.busy) {
+          ctl.notice("warning", "agent 正忙，/undo 不可用（Ctrl+C 可中断，或等当前轮次结束）");
+          return;
+        }
+        runCommand(ctl, "/undo", store);
+      },
+      s: ({ ctl, store }) => runCommand(ctl, "/usage", store),
+      q: ({ ctl, store }) => runCommand(ctl, "/quit", store),
+      h: ({ ctl, store }) => runCommand(ctl, "/help", store),
     },
     onAltEnter(text, { ctl, store }) {
       const t = String(text || "").trim();
@@ -70,7 +94,7 @@ export function apply(ctx) {
               clearInterval(poller);
               poller = null;
               ctl.notice("info", `↩ 发送排队消息: ${p.slice(0, 60)}`);
-              ctl.submit(p);
+              submitThroughHooks(p, ctl, store); // H06: 走 onSubmit 钩子链
             } else if (pending && age >= 300000) {
               // never let a queued message sit forever
               pending = null;
@@ -82,7 +106,7 @@ export function apply(ctx) {
         }
       } else {
         ctl.notice("info", "↩ 直接发送");
-        ctl.submit(t);
+        submitThroughHooks(t, ctl, store); // H06: 走 onSubmit 钩子链
       }
     },
     onAltUp({ ctl, store }) {
@@ -93,7 +117,14 @@ export function apply(ctx) {
       const p = pending;
       pending = null;
       if (poller) { clearInterval(poller); poller = null; }
-      store.set({ input: { ...store.get().input, buffer: p, cursor: p.length } });
+      // H09: 若 app 侧（G1）在 ctl 上暴露了 setBuffer（同步 Input 实例内部
+      // buffer），优先用它；否则退回 store 快照同步（仅渲染层生效）。keymap
+      // 拿不到 Input 实例（app index.js 内部闭包），完整修复依赖 ctl.setBuffer。
+      if (typeof ctl.setBuffer === "function") {
+        ctl.setBuffer(p, p.length);
+      } else {
+        store.set({ input: { ...store.get().input, buffer: p, cursor: p.length } });
+      }
       ctl.notice("info", "已取回排队消息到输入框");
     },
   }));

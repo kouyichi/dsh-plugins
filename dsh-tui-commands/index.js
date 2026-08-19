@@ -20,6 +20,17 @@ export const inject = ["tuiExtensions"];
 const DSH_HOME = process.env.DSH_HOME ?? join(homedir(), ".dsh");
 const COMMANDS_DIR = join(DSH_HOME, "tui-commands");
 
+// H11: app 内置/核心命令名单（与 /commands 展示用的过滤名单一致）。
+// ext.commands 只含砖注册的命令，核心命令桥（dsh 后台命令）与 TUI 内建
+// 命令不在其中 —— 自定义命令文件若只查 ext.commands.has() 会漏判，导致
+// 用户自定义 /compact、/new 之类"劫持"内置命令。注册前必须双查。
+const BUILTIN_COMMANDS = new Set([
+  "/help", "/config", "/mode", "/model", "/resume", "/sessions", "/compact", "/jobs",
+  "/plan", "/goal", "/search", "/trajectory", "/feedback", "/agents", "/tab", "/new",
+  "/plugins", "/quit", "/exit", "/q", "/root", "/usage", "/context", "/export",
+  "/theme", "/todos", "/undo", "/init", "/btw", "/update", "/goals", "/find",
+]);
+
 const AGENTS_MD_TEMPLATE = `# AGENTS.md — dsh agent 项目指引
 
 > 由 dsh-tui-commands 的 /init 生成。编辑此文件让 agent 了解本项目：
@@ -62,7 +73,9 @@ export function apply(ctx) {
     for (const f of readdirSync(COMMANDS_DIR)) {
       if (!f.endsWith(".md")) continue;
       const name = "/" + f.replace(/\.md$/, "").toLowerCase();
-      if (ext.commands.has(name)) {
+      // H11: 双查 —— ext.commands（砖/已注册）之外，内置命令（核心命令桥 +
+      // TUI 内建）也要拒绝，防止自定义命令劫持 /compact /new 等
+      if (ext.commands.has(name) || BUILTIN_COMMANDS.has(name)) {
         ctx.logger.warn(`[dsh-tui-commands] 自定义命令 ${name} 与内置/已注册命令重名，已忽略（${f}）`);
         continue; // built-in or earlier wins
       }
@@ -115,7 +128,7 @@ export function apply(ctx) {
     name: "/commands",
     busySafe: true,
     handler(full, ctl) {
-      ctl.notice("info", `自定义命令目录: ${COMMANDS_DIR}\n放一个 xxx.md（frontmatter description + 正文为 prompt，支持 $ARGUMENTS）即成为 /xxx 命令。当前自定义命令: ${[...ext.commands.keys()].filter((k) => k.startsWith("/") && !["/help", "/config", "/mode", "/model", "/resume", "/sessions", "/compact", "/jobs", "/plan", "/goal", "/search", "/trajectory", "/feedback", "/agents", "/tab", "/new", "/plugins", "/quit", "/exit", "/q", "/root", "/usage", "/context", "/export", "/theme", "/todos", "/undo", "/init", "/btw", "/update", "/goals", "/find"].includes(k)).join(" ") || "（无，可加）"}`);
+      ctl.notice("info", `自定义命令目录: ${COMMANDS_DIR}\n放一个 xxx.md（frontmatter description + 正文为 prompt，支持 $ARGUMENTS）即成为 /xxx 命令。当前自定义命令: ${[...ext.commands.keys()].filter((k) => k.startsWith("/") && !BUILTIN_COMMANDS.has(k)).join(" ") || "（无，可加）"}`);
     },
   }));
 

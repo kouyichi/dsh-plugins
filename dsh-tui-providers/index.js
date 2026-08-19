@@ -36,7 +36,7 @@
  * @module dsh-tui-providers
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { OpenAICompatAdapter } from "./lib/openai-compat.js";
@@ -60,21 +60,10 @@ const DEFAULT_PROVIDERS = [
       { id: "deepseek-v4-pro", name: "DeepSeek-V4-Pro", contextWindow: 128000, efforts: ["off", "high", "max"] },
     ],
   },
-  {
-    name: "openai",
-    displayName: "OpenAI (CRS 网关)",
-    baseURL: "http://10.100.154.16:3000/openai/v1",
-    apiKeyEnv: "OPENAI_API_KEY",
-    defaultContextWindow: 128000,
-    efforts: ["off", "low", "medium", "high", "max"],
-    models: [
-      { id: "gpt-5.6-sol", name: "GPT-5.6-Sol", contextWindow: 128000, efforts: ["off", "low", "medium", "high", "max"] },
-      { id: "gpt-4o", name: "GPT-4o", contextWindow: 128000, efforts: ["off", "low", "high"] },
-      { id: "gpt-4.1", name: "GPT-4.1", contextWindow: 128000, efforts: ["off", "low", "high"] },
-    ],
-    stripToolFields: ["sandbox_permissions", "justification", "timeoutMs", "run_in_background", "workdir"],
-    extraSystem: "Current sandbox mode is danger-full-access. Do NOT request sandbox escalation and do NOT pass sandbox_permissions, justification or workdir parameters to the bash tool — the harness sets them. Just pass command and description.",
-  },
+  // 注：原 openai 条目（CRS 网关 http://10.100.154.16:3000/openai/v1）是私有环境
+  // 配置，硬编码进默认列表会泄露内网地址，已移除（S-07）。需要者自行
+  // /provider add openai <baseURL> <apiKeyEnv> 或编辑 tui-providers.json；
+  // 已有配置文件里的 openai 条目不受影响（ensureConfig 只迁移字段，不增删）。
   {
     name: "openrouter",
     displayName: "OpenRouter",
@@ -157,17 +146,48 @@ const DEFAULT_PROVIDERS = [
   },
 ];
 
+// 配置文件损坏时备份为 .bak 的提示状态（供 /providers 面板展示）
+let lastConfigIssue = null; // "corrupt-backup" | null
+
 function loadConfig() {
-  try { return JSON.parse(readFileSync(CONFIG_PATH, "utf8")); } catch { return null; }
+  let raw;
+  try {
+    raw = readFileSync(CONFIG_PATH, "utf8");
+  } catch {
+    return null; // 文件不存在（首次运行）→ 由 ensureConfig 创建默认
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // 文件存在但 JSON 损坏：绝不静默覆盖——原样备份为 .bak 后返回标记，让
+    // ensureConfig 提示并重建默认，用户可手工从 .bak 找回原配置（S-09）。
+    try { writeFileSync(`${CONFIG_PATH}.bak`, raw); } catch { /* 备份失败不阻断重建 */ }
+    return { __corrupt: true };
+  }
 }
 
 function saveConfig(cfg) {
   mkdirSync(join(CONFIG_PATH, ".."), { recursive: true });
-  writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+  // 原子写：先写临时文件再 rename，避免进程中途崩溃留下半截 JSON 损坏配置（S-10）
+  const tmpPath = `${CONFIG_PATH}.tmp`;
+  try {
+    writeFileSync(tmpPath, JSON.stringify(cfg, null, 2));
+    renameSync(tmpPath, CONFIG_PATH);
+  } catch (e) {
+    try { unlinkSync(tmpPath); } catch { /* 清理失败忽略 */ }
+    throw e;
+  }
 }
 
-function ensureConfig() {
+function ensureConfig(logger) {
   let cfg = loadConfig();
+  if (cfg?.__corrupt) {
+    lastConfigIssue = "corrupt-backup";
+    logger?.warn?.(`[dsh-tui-providers] ${CONFIG_PATH} JSON 损坏：已备份为 ${CONFIG_PATH}.bak 并重建默认配置（原配置可在 .bak 中找回）`);
+    cfg = { providers: DEFAULT_PROVIDERS };
+    saveConfig(cfg);
+    return cfg;
+  }
   if (!cfg || !Array.isArray(cfg.providers) || cfg.providers.length === 0) {
     cfg = { providers: DEFAULT_PROVIDERS };
     saveConfig(cfg);
@@ -175,14 +195,10 @@ function ensureConfig() {
   }
   // Migrate existing configs: fold in new default fields (efforts,
   // stripToolFields, extraSystem, defaultContextWindow) for known providers
-  // while keeping the user's baseURL/keyEnv/models; append prebuilt
-  // providers the user doesn't have yet.
+  // while keeping the user's baseURL/keyEnv/models. 不再自动追加缺失的默认
+  // provider：用户删除的默认项（/provider remove）不会被重启回补（S-08）。
   const byName = new Map(DEFAULT_PROVIDERS.map((p) => [p.name, p]));
   let changed = false;
-  const existing = new Set(cfg.providers.map((p) => p.name));
-  for (const def of DEFAULT_PROVIDERS) {
-    if (!existing.has(def.name)) { cfg.providers.push(def); changed = true; }
-  }
   for (const p of cfg.providers) {
     const def = byName.get(p.name);
     if (!def) continue;
@@ -250,7 +266,7 @@ export function apply(ctx) {
     return;
   }
   const disposers = [];
-  const cfg = ensureConfig();
+  const cfg = ensureConfig(ctx.logger);
   const connections = new Map();
   for (const p of cfg.providers) connections.set(p.name, toConnection(p));
 
@@ -328,18 +344,30 @@ export function apply(ctx) {
       // reflects the persisted default, which lags behind /provider switches).
       const liveProvider = store.meta?.provider;
       const effProvider = (liveProvider && cfg.providers.some((p) => p.name === liveProvider)) ? liveProvider : sel.provider;
-      // 校验当前模型是否支持该力度（预置表）
-      const conn = toConnection(cfg.providers.find((p) => p.name === effProvider) ?? {});
-      const supported = conn.efforts ?? [];
+      // S-11: 用 live provider 时 model 也要取该 provider 的（store.meta.model 是
+      // /provider 切换后写入的实时值；currentSelection 可能是旧 provider 的持久化值），
+      // 并校验 model 属于 effProvider 的模型列表，不匹配直接报错提示而非静默错配。
+      const effModel = (liveProvider === effProvider && store.meta?.model) ? store.meta.model : sel.model;
+      const target = cfg.providers.find((p) => p.name === effProvider);
+      const modelIds = Array.isArray(target?.models) ? target.models.map((m) => (typeof m === "string" ? m : m.id)) : [];
+      if (modelIds.length > 0 && !modelIds.includes(effModel)) {
+        ctl.notice("error", `${effProvider} 的模型列表不含 ${effModel}（${modelIds.join(" / ")}）；请先 /model 选择该 provider 的模型`);
+        return;
+      }
+      // 力度校验优先看模型级 efforts（同 resolveModel：模型级 > provider 级）
+      const modelEfforts = (Array.isArray(target?.models) ? target.models.find((m) => typeof m === "object" && m.id === effModel) : undefined)?.efforts;
+      const conn = toConnection(target ?? {});
+      const supported = Array.isArray(modelEfforts) ? modelEfforts : (conn.efforts ?? []);
       if (!supported.includes(arg)) {
-        ctl.notice("warning", `${effProvider} 的模型力度集合为 ${supported.join("/")}，不支持 ${arg}；用 /model 选模型后 e 遍历`);
+        ctl.notice("warning", `${effProvider}（${effModel}）的模型力度集合为 ${supported.join("/")}，不支持 ${arg}；用 /model 选模型后 e 遍历`);
         return;
       }
       (async () => {
         try {
           const m = ctx.get("agentDefaultModel");
-          await m.saveSelection({ provider: effProvider, model: sel.model, reasoningEffort: arg });
-          ctl.updateSelection({ reasoningEffort: arg });
+          await m.saveSelection({ provider: effProvider, model: effModel, reasoningEffort: arg });
+          // 同步实时选择快照（含 provider/model），保证 /effort 与 /provider 状态一致
+          ctl.updateSelection({ reasoningEffort: arg, provider: effProvider, model: effModel });
           ctl.notice("success", `推理力度 → ${arg}（立即生效）`);
         } catch (e) {
           ctl.notice("error", `切换失败: ${e.message}`);
@@ -366,6 +394,9 @@ export function apply(ctx) {
       lines.push(`当前 provider: ${current}`);
       lines.push("");
       lines.push(`配置: ${CONFIG_PATH}`);
+      if (lastConfigIssue === "corrupt-backup") {
+        lines.push("⚠ 配置文件曾损坏，已备份为 tui-providers.json.bak（当前为重建默认，原配置可在 .bak 找回）");
+      }
       lines.push("");
       // credential resolution diagnostics (quick self-check for each route)
       const cred = ctx.get("credentials");
@@ -449,14 +480,23 @@ export function apply(ctx) {
       const model = Array.isArray(target.models) && target.models.length > 0
         ? (typeof target.models[0] === "string" ? target.models[0] : target.models[0].id)
         : "default";
+      // S-12: 力度不再硬编码 "high"——按 resolveModel 的 fallback 链取目标 provider
+      // 支持的力度：模型级 efforts > provider efforts > 默认集；优先 high，否则
+      // efforts[0]，最后 "off" 兜底（如 ollama 只有 off，切过去给 high 会直接报错）。
+      const tconn = toConnection(target);
+      const firstModel = Array.isArray(target.models) && target.models.length > 0
+        ? (typeof target.models[0] === "string" ? { id: target.models[0] } : target.models[0])
+        : undefined;
+      const effortIds = firstModel?.efforts ?? tconn.efforts ?? ["off", "low", "high", "max"];
+      const effort = effortIds.includes("high") ? "high" : (effortIds[0] ?? "off");
       (async () => {
         try {
           const defaultModel = ctx.get("agentDefaultModel");
           if (defaultModel?.saveSelection) {
-            await defaultModel.saveSelection({ provider: target.name, model, reasoningEffort: "high" });
+            await defaultModel.saveSelection({ provider: target.name, model, reasoningEffort: effort });
           }
           // apply immediately to the running agent (mutable selection snapshot)
-          ctl.updateSelection({ provider: target.name, model, reasoningEffort: "high" });
+          ctl.updateSelection({ provider: target.name, model, reasoningEffort: effort });
           // keep status bar / splash in sync (core /model does this too)
           store.set({ meta: { ...store.get().meta, model, provider: target.name } });
           ctl.notice("success", `已切换 provider → ${target.name}（${model}）。立即生效；/model 可换模型与力度`);

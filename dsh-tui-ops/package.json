@@ -1,0 +1,12 @@
+{
+  "name": "dsh-tui-ops",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./index.js",
+  "description": "TUI brick: 工程化命令集 /doctor /login /logout /add-dir /hooks /mcp /cost /tokens /thinking /settings — env self-check, credential status (no secret values), policy scope, MCP status, token/cost details, thinking display toggle, config sources. Ported from ccch1mneyyy/dsh-TUI semantics.",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

@@ -120,8 +120,9 @@ export function apply(ctx) {
       if (!m || !A2A_AGENTS[m[1]]) return false;
       const name = m[1];
       const task = m[2];
-      ctl.notice("info", `A2A 派活 @${name}: ${task.slice(0, 60)}`);
-      ctl.submit(`（A2A 派活 @${name} 已发起，结果稍后显示）`);
+      // H26: 不再向主会话提交占位用户消息（会污染会话记录/占用一轮）；
+      // 派活状态用 notice 显示，结果回来再 notice。
+      ctl.notice("info", `A2A 派活 @${name}: ${task.slice(0, 60)}（完成结果稍后显示，最多 ${TOTAL_TIMEOUT_MS / 1000}s）`);
       (async () => {
         try {
           const r = await a2aSend(name, task);
@@ -130,7 +131,7 @@ export function apply(ctx) {
           ctl.notice("error", `A2A @${name} 失败: ${e.message}`);
         }
       })();
-      return true;
+      return true; // 消费输入：@agent 文本不进主会话
     },
     onSuggest(buffer) {
       if (!String(buffer).startsWith("@")) return [];

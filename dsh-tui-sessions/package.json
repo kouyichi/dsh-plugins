@@ -1,0 +1,12 @@
+{
+  "name": "dsh-tui-sessions",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./index.js",
+  "description": "TUI brick: 会话工作流 — /rename /clear /trace /workspace resume|rename|open + /resume 会话浏览器（跨项目/搜索/预览/折叠子代理运行），移植自 ccch1mneyyy/dsh-TUI。",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

@@ -36,7 +36,9 @@ export function apply(ctx) {
   // this is brick business, not core business).
   // 真实窗口优先走 resolveModelInfo（adapter 的 configured.contextWindow ??
   // defaultContextWindow）——listModels 的 modelInfo() 不返回 contextWindow，
-  // 只有 resolveModel 链路带。解析成功同步到 store.ctxWindow，状态栏 ctx% 跟随。
+  // 只有 resolveModel 链路带。解析结果只存模块级 ctxWindow（H13：这里没有
+  // store 句柄，原先的 store.set 抛 ReferenceError 被 catch 吞掉；状态栏与
+  // 面板统一读模块级 ctxWindow，不再写 store）。
   (async () => {
     try {
       const llm = ctx.get("llm");
@@ -50,7 +52,6 @@ export function apply(ctx) {
           const cur = models.find((m) => m.id === sel.model);
           if (cur?.contextWindow) ctxWindow = Number(cur.contextWindow);
         }
-        if (ctxWindow) store.set({ ctxWindow });
       }
     } catch { /* non-fatal: falls back to 128k */ }
   })();
@@ -70,7 +71,8 @@ export function apply(ctx) {
     render(store) {
       const s = store.stats;
       if (!s || !s.totalTokens) return "";
-      const win = store.ctxWindow ?? 128000;
+      // H13: 状态栏回退到砖解析的模块级 ctxWindow（store.ctxWindow 已不再写入）
+      const win = store.ctxWindow ?? ctxWindow ?? 128000;
       const pct = Math.min(100, Math.round(s.totalTokens / win * 100));
       return `ctx ${pct}%`;
     },

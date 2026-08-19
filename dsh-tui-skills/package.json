@@ -1,0 +1,12 @@
+{
+  "name": "dsh-tui-skills",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./index.js",
+  "description": "TUI brick: Claude Code skill commands (/audit /bug /practice /review /pr_comments /release-notes /vuln-check + /skills) — official dsh skill registry first, built-in CC skill templates as fallback.",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

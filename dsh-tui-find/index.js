@@ -16,6 +16,30 @@ export const inject = ["tuiExtensions"];
 const MAX_KEEP = 400;
 const NOISE = ["<system-reminder>", "<system>", "The approval policy changed", "You are a coding agent"];
 
+/**
+ * P-01/S-19: load 与 confirm 共用的命中计算。返回按时间倒序取最近 50 条的
+ * 显示列表（{i: 原始消息索引, role, snippet}）+ 总数 + 是否截断。
+ * 显示层用连续序号 [1..N]，confirm 再经此映射回原始消息索引。
+ */
+function computeHits(store) {
+  const q = store.findQuery || "";
+  if (!q) return { hits: [], total: 0, truncated: false };
+  const all = [];
+  messages.forEach((m, i) => {
+    const idx = m.text.toLowerCase().indexOf(q);
+    if (idx >= 0) {
+      const start = Math.max(0, idx - 40);
+      const raw = m.text.slice(start, idx + q.length + 80);
+      // mark the query with ⟦⟧ like /search so hits are visually obvious
+      const marked = raw.replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"), "⟦$1⟧");
+      const snippet = (start > 0 ? "…" : "") + marked + "…";
+      all.push({ i, role: m.role, snippet });
+    }
+  });
+  const truncated = all.length > 50;
+  return { hits: all.slice(-50), total: all.length, truncated };
+}
+
 export function apply(ctx) {
   const ext = ctx.get("tuiExtensions");
   if (!ext) {
@@ -46,7 +70,8 @@ export function apply(ctx) {
     walk(event.data);
     const t = texts.map((s) => s.trim()).filter(Boolean).find((s) => !NOISE.some((n) => s.startsWith(n)));
     if (t) {
-      messages.push({ role, text: t.slice(0, 4000) });
+      // S-18: 4000 字符截断会让关键词落在截断点之后漏匹配，提到 16000（近似全文，仍防内存膨胀）
+      messages.push({ role, text: t.slice(0, 16000) });
       if (messages.length > MAX_KEEP) messages.shift();
     }
   };
@@ -74,35 +99,30 @@ export function apply(ctx) {
     load(store) {
       const q = store.findQuery || "";
       if (!q) return { lines: ["（无查询）"] };
-      const hits = [];
-      messages.forEach((m, i) => {
-        const idx = m.text.toLowerCase().indexOf(q);
-        if (idx >= 0) {
-          const start = Math.max(0, idx - 40);
-          const raw = m.text.slice(start, idx + q.length + 80);
-          // mark the query with ⟦⟧ like /search so hits are visually obvious
-          const marked = raw.replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"), "⟦$1⟧");
-          const snippet = (start > 0 ? "…" : "") + marked + "…";
-          hits.push({ i, role: m.role, snippet });
-        }
-      });
-      if (hits.length === 0) {
+      const { hits, total, truncated } = computeHits(store);
+      if (total === 0) {
         return { lines: [`「${q}」在会话中无命中（已缓存最近 ${messages.length} 条消息）`, "", "提示: /search <词> 可跨会话全文搜索"] };
       }
-      const lines = [`「${q}」命中 ${hits.length} 条（enter 重发该条继续追问）`, ""];
-      hits.slice(-50).forEach((h) => {
-        lines.push(`${h.role === "user" ? "👤" : "🤖"} [${h.i}] ${h.snippet.replace(/\n/g, " ")}`);
+      const lines = [`「${q}」命中 ${total} 条（enter 重发该条继续追问）`, ""];
+      // P-01: 显示序号从 1 开始连续（显示层 idx+1，内部仍用原始消息索引定位）
+      hits.forEach((h, n) => {
+        lines.push(`${h.role === "user" ? "👤" : "🤖"} [${n + 1}] ${h.snippet.replace(/\n/g, " ")}`);
       });
+      // S-19: 命中过多时不再静默截断，明确提示只显示最近 50 条
+      if (truncated) lines.push("", "（命中较多，仅显示最近 50 条；缩小关键词可精确过滤）");
       return { lines };
     },
-    confirm(line, ctl) {
+    confirm(line, ctl, store) {
       // `u` flag is mandatory: without it the character class [👤🤖] matches
       // one UTF-16 surrogate and the following ` \[` can never line up,
       // silently disabling Enter on every hit.
       const m = line?.match(/^[👤🤖] \[(\d+)\]/u);
       if (!m) return;
-      const idx = parseInt(m[1], 10);
-      const msg = messages[idx];
+      const n = parseInt(m[1], 10) - 1; // 显示序号（1 起）→ 命中列表下标
+      const { hits } = computeHits(store);
+      const h = hits[n];
+      if (!h) return;
+      const msg = messages[h.i];
       if (!msg) return;
       ctl.closeExtPanel();
       ctl.notice("info", `↩ 就命中消息继续: ${msg.text.slice(0, 60)}…`);

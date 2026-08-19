@@ -11,6 +11,19 @@
 export const name = "dsh-tui-search";
 export const inject = ["tuiExtensions"];
 
+// P-18/C2-01: sessionQuery 服务返回的命中项是 {header:{id,cwd,...}, bestMatch:{sessionId,snippet}} 结构，
+// 没有顶层 title/id —— 旧代码读 h.title||h.id 全是 undefined，中文命中标题显示 "?"、
+// enter 生成 --resume undefined。统一按实际结构取值（同时兼容 sqlite 直查的 {id,title,cwd} 形态）。
+function hitId(h) {
+  return h?.header?.id ?? h?.bestMatch?.sessionId ?? h?.id;
+}
+function hitTitle(h) {
+  return h?.header?.title ?? h?.title ?? hitId(h) ?? "?";
+}
+function hitCwd(h) {
+  return h?.header?.cwd ?? h?.cwd;
+}
+
 /**
  * Direct SQLite fallback for /search. The sessionQuery service reconciles
  * the whole corpus on every search and throws "persistence observation did
@@ -113,9 +126,11 @@ export function apply(ctx) {
         if (hits.length === 0) return { lines: [`「${q}」无命中。首次搜索会建索引，可能较慢；重试即可。`] };
         const lines = [`「${q}」命中 ${hits.length} 个会话（enter 查看恢复命令）`, ""];
         hits.forEach((h, i) => {
-          const title = h.title || h.id || "?";
+          // P-18: 按 header 结构取标题/工作目录
+          const title = hitTitle(h);
+          const cwd = hitCwd(h);
           lines.push(`[${String(i + 1).padStart(2, " ")}] ${title}`);
-          if (h.cwd) lines.push(`      @ ${h.cwd}`);
+          if (cwd) lines.push(`      @ ${cwd}`);
         });
         lines.push("");
         lines.push("提示: 会话内搜索用 /find <词>");
@@ -125,7 +140,8 @@ export function apply(ctx) {
       }
     },
     confirm(line, ctl, store) {
-      const m = line?.match(/^\[(\d+)\]\s+(.+)$/);
+      // P-19: 面板行是 "[ 1] <title>"（padStart 补位空格），旧正则 /^\[(\d+)\]/ 匹配不上
+      const m = line?.match(/^\[\s*(\d+)\]\s+(.+)$/);
       if (!m) return;
       ctl.closeExtPanel();
       const idx = parseInt(m[1], 10) - 1;
@@ -144,7 +160,9 @@ export function apply(ctx) {
         }
       };
       hit().then((h) => {
-        ctl.notice("info", h ? `继续该会话: dsh --profile tui --resume ${h.id}` : "（命中已失效，重新 /search）");
+        // C2-01: 命中 id 必须从 header/bestMatch 取（旧代码 h.id 恒 undefined → --resume undefined）
+        const id = hitId(h);
+        ctl.notice("info", id ? `继续该会话: dsh --profile tui --resume ${id}` : "（命中已失效，重新 /search）");
       }).catch(() => {});
     },
   }));

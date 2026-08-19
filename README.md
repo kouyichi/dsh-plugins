@@ -59,13 +59,17 @@
 | `dsh-tui-keymap` | **leader 键**（ctrl+x m/c/t/x/u/s）+ Alt+Enter 忙时排队 | ctrl+x m 开模型面板 |
 | `dsh-tui-commands` | **md 文件自定义命令** + `/init`（AGENTS.md） | /ping → 执行成功 |
 | `dsh-tui-btw` | `/btw` 侧会话（新 tab 不扰主线） | 新会话执行成功 |
-| `dsh-tui-update` | `/update` npm 版本检查 | 0.1.0-rc.6 精确匹配 |
+| `dsh-tui-update` | `/update` 版本检查 + **两步确认升级 + 重启恢复会话** | 0.1.0-rc.6 精确匹配 |
 | `dsh-tui-goals` | `/goal` `/goals` 目标面板 | 状态显示 |
 | `dsh-tui-find` | `/find` 会话内搜索（可选中继续） | 命中 3 条 |
 | `dsh-tui-a2a` | `/agents` + **@mention 派活**（@hermes/@claude/@codex/@dsh）+ @ 补全 | @hermes 真实执行 1.5s 返回 |
 | `dsh-tui-search` | `/search` 跨会话全文搜索面板 | 建索引后命中 |
 | `dsh-tui-trajectory` | `/trajectory` 轨迹回放面板 | 事件时间线 |
 | `dsh-tui-feedback` | `/feedback up\|down` 反馈记录 | 命令路由正常 |
+| `dsh-tui-rewind` | **双击 Esc 时间回溯** + `/rewind` + fork（内核 sessions.fork 实测） | fork boundary PASS |
+| `dsh-tui-skills` | **CC 技能命令全集** `/audit /bug /review /practice /pr_comments /release-notes /vuln-check` + `/skills` | 12/12 冒烟 |
+| `dsh-tui-sessions` | 会话工作流 `/rename /clear /trace /workspace` + `/resume` 浏览器（搜索/预览/跨项目/折叠子代理） | 621 会话冒烟 |
+| `dsh-tui-ops` | 工程化 `/doctor /login /logout /add-dir /hooks /mcp /cost /tokens /thinking /settings` | 冒烟 ALL PASS |
 
 ---
 
@@ -106,7 +110,7 @@ profile 配置在 `~/.dsh/profiles/tui-headless/`（startup 解析 flags → run
 ## 🧪 验证
 
 ```bash
-npm test                # node verify.mjs：33 插件契约检查（tools/砖注册表/服务 provide）
+npm test                # node verify.mjs：37 插件契约检查（tools/砖注册表/服务 provide）
 node verify.mjs dsh-guard   # 单插件
 ```
 
@@ -114,7 +118,7 @@ node verify.mjs dsh-guard   # 单插件
 
 ## 🐋 与生态
 
-- 对比最火 dsh-TUI（ccch1mneyyy，1492★）：它的优势在外围体验（鼠标/图片/虚拟化）；**本套件独有**：A2A 派活面板、SQLite FTS 搜索、运行时插件装卸、TUI×插件全家桶联动（usage/context/export 直接消费数据插件）、零构建纯 Node 部署。
+- 对比最火 dsh-TUI（ccch1mneyyy，1877★）：外围体验（鼠标/图片/虚拟化）仍领先，但 rewind 时间回溯、CC 技能命令、会话工作流、工程化命令集已按积木砖移植（2026-08-18）；**本套件独有**：A2A 派活面板、SQLite FTS 搜索、运行时插件装卸、TUI×插件全家桶联动（usage/context/export 直接消费数据插件）、零构建纯 Node 部署。
 - 方向决策依据（生态空白实测，2026-08-16）：kanban 闭环、安全治理、插件工具链、评测、会话分析、A2A server——第三方全部 ≤3★ 或无。
 
 ## 📄 文档

@@ -1,0 +1,12 @@
+{
+  "name": "dsh-tui-rewind",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./index.js",
+  "description": "TUI brick: double-Esc time rewind + /rewind + fork — pick a past message, rewind the conversation or fork a child session from that point (kernel sessions.fork, probe-verified).",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

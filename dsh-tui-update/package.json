@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",
-  "description": "TUI brick: /update — check npm for a newer @deepseek-ai/dsh and show the upgrade command (no auto-update).",
+  "description": "TUI brick: /update — check npm for newer @deepseek-ai/dsh + dsh-tui-app, two-step confirm, upgrade, restart TUI and resume the session.",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
