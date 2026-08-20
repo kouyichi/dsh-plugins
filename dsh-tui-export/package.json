@@ -1,5 +1,5 @@
 {
-  "name": "dsh-tui-export",
+  "name": "dsh-plugins-tui-export",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",

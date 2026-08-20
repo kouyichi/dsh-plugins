@@ -1,5 +1,5 @@
 {
-  "name": "dsh-tui-rewind",
+  "name": "dsh-plugins-tui-rewind",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",

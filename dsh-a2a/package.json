@@ -1,5 +1,5 @@
 {
-  "name": "dsh-a2a",
+  "name": "dsh-plugins-a2a",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",

@@ -1,5 +1,5 @@
 {
-  "name": "dsh-kanban",
+  "name": "dsh-plugins-kanban",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",

@@ -1,5 +1,5 @@
 {
-  "name": "dsh-tui-compact",
+  "name": "dsh-plugins-tui-compact",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",

@@ -1,5 +1,5 @@
 {
-  "name": "dsh-learn",
+  "name": "dsh-plugins-learn",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",

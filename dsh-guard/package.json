@@ -1,5 +1,5 @@
 {
-  "name": "dsh-guard",
+  "name": "dsh-plugins-guard",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",

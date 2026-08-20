@@ -1,5 +1,5 @@
 {
-  "name": "dsh-tui-providers",
+  "name": "dsh-plugins-tui-providers",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",
@@ -11,5 +11,8 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-llm": "*"
   }
 }

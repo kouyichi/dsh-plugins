@@ -1,5 +1,5 @@
 {
-  "name": "dsh-tui-skills",
+  "name": "dsh-plugins-tui-skills",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",

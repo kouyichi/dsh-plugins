@@ -1,5 +1,5 @@
 {
-  "name": "dsh-tui-search",
+  "name": "dsh-plugins-tui-search",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",

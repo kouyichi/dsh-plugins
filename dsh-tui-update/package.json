@@ -1,5 +1,5 @@
 {
-  "name": "dsh-tui-update",
+  "name": "dsh-plugins-tui-update",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",

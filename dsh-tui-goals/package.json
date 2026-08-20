@@ -1,5 +1,5 @@
 {
-  "name": "dsh-tui-goals",
+  "name": "dsh-plugins-tui-goals",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",

@@ -1,5 +1,5 @@
 {
-  "name": "dsh-pack",
+  "name": "dsh-plugins-pack",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",

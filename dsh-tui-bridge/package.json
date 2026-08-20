@@ -1,5 +1,5 @@
 {
-  "name": "dsh-tui-bridge",
+  "name": "dsh-plugins-tui-bridge",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",

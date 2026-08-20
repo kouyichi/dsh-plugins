@@ -1,5 +1,5 @@
 {
-  "name": "dsh-tui-trajectory",
+  "name": "dsh-plugins-tui-trajectory",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",

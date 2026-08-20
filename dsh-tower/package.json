@@ -1,5 +1,5 @@
 {
-  "name": "dsh-tower",
+  "name": "dsh-plugins-tower",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",

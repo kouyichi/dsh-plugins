@@ -1,5 +1,5 @@
 {
-  "name": "dsh-meter",
+  "name": "dsh-plugins-meter",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",

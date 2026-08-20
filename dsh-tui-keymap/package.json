@@ -1,5 +1,5 @@
 {
-  "name": "dsh-tui-keymap",
+  "name": "dsh-plugins-tui-keymap",
   "version": "1.0.0",
   "type": "module",
   "main": "./index.js",
