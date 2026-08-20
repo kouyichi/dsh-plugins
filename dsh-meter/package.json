@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugins-meter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "main": "./index.js",
   "description": "Token usage & cost metering for dsh: per-session and aggregate token statistics (cache hit rate, input/output split) with configurable pricing, plus markdown reports.",
@@ -8,5 +8,10 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kouyichi/dsh-plugins.git",
+    "directory": "dsh-meter"
   }
 }

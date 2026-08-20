@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugins-learn",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "main": "./index.js",
   "description": "Self-learning + skill curator for dsh: record lessons, draft/promote skills, periodic review that corrects/consolidates/retires skills (Hermes curator pattern).",
@@ -8,5 +8,10 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kouyichi/dsh-plugins.git",
+    "directory": "dsh-learn"
   }
 }

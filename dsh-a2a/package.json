@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugins-a2a",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "main": "./index.js",
   "description": "Native A2A (Agent-to-Agent, v1.0 JSON-RPC) server for dsh: expose this dsh as a callable agent over HTTP with tasks/send|get|cancel|list, bearer-token auth, and agent-per-task execution.",
@@ -8,5 +8,10 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kouyichi/dsh-plugins.git",
+    "directory": "dsh-a2a"
   }
 }

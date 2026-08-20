@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugins-bench",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "main": "./index.js",
   "description": "Agent benchmark runner for dsh: run a task set through fresh agents, score pass/fail by expectation keywords, measure duration, and produce comparison reports (evaluation gap in the ecosystem).",
@@ -8,5 +8,10 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kouyichi/dsh-plugins.git",
+    "directory": "dsh-bench"
   }
 }

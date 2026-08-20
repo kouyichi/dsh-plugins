@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugins-pack",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "main": "./index.js",
   "description": "Context packing for dsh: compile files + skills + memory + recent session highlights into a bounded-context pack file, and estimate the skills-catalog context budget (Codex 2% progressive-disclosure rule).",
@@ -8,5 +8,10 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kouyichi/dsh-plugins.git",
+    "directory": "dsh-pack"
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugins-profile",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "main": "./index.js",
   "description": "Profile manager for dsh: list/create/delete/rename/describe/use/export/import profiles (Hermes `hermes profile` port).",
@@ -8,5 +8,10 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kouyichi/dsh-plugins.git",
+    "directory": "dsh-profile"
   }
 }

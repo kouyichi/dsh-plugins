@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugins-cron",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "main": "./index.js",
   "description": "Persistent background scheduled agent jobs for dsh: cron_add/list/remove/run/logs with durable storage, agent-per-run execution, and a 30s dispatcher tick (Hermes cron + Kimi built-in cron pattern).",
@@ -8,5 +8,10 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kouyichi/dsh-plugins.git",
+    "directory": "dsh-cron"
   }
 }

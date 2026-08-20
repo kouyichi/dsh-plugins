@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugins-dream",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "main": "./index.js",
   "description": "Dream — 4-phase memory consolidation for dsh (port of Claude Code's auto-dream skill): Orient → Gather → Consolidate → Prune&Index over session logs, auto-triggered every 24h.",
@@ -8,5 +8,10 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kouyichi/dsh-plugins.git",
+    "directory": "dsh-dream"
   }
 }
