@@ -1,7 +1,6 @@
 {
   "name": "dsh-plugins-workspace-allowlist",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "main": "./index.js",
   "description": "Web/交互面按项目文件夹的可见性控制：workspace 注册白名单 + 可选 fs 路径过滤。挂 web profile（需要 workspaceRegistry 服务）。",
